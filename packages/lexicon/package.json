@@ -1,0 +1,11 @@
+{
+  "name": "@keytrace/lexicon",
+  "version": "0.0.1",
+  "files": [
+    "lexicons"
+  ],
+  "type": "module",
+  "exports": {
+    "./lexicons/*": "./lexicons/*"
+  }
+}

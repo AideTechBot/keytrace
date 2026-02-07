@@ -1,0 +1,30 @@
+{
+  "lexicon": 1,
+  "id": "dev.keytrace.identity.claim",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "description": "An identity claim linking this DID to an external account",
+      "record": {
+        "type": "object",
+        "required": ["claimUri", "createdAt"],
+        "properties": {
+          "claimUri": {
+            "type": "string",
+            "description": "The identity claim URI (e.g., https://gist.github.com/username/id, dns:example.com)"
+          },
+          "comment": {
+            "type": "string",
+            "maxLength": 256,
+            "description": "Optional user-provided label for this claim"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime"
+          }
+        }
+      }
+    }
+  }
+}

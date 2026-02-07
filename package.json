@@ -1,4 +1,24 @@
 {
   "name": "keytrace",
-  "packageManager": "yarn@4.9.2"
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
+    "deploy": "yarn workspace keytrace.dev zip && scw function deploy namespace-id=6ae5a968-edd9-4c1b-be35-ea6c19797ba1 name=server runtime=node22 zip-file=apps/keytrace.dev/dist/function.zip"
+  },
+  "devDependencies": {
+    "oxfmt": "^0.27.0",
+    "turbo": "^2.8.1",
+    "typescript": "^5.7.0"
+  },
+  "packageManager": "yarn@4.12.0"
 }
