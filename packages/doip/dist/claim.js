@@ -113,22 +113,33 @@ export class Claim {
         if (!fetcher) {
             throw new Error(`Unknown fetcher: ${request.fetcher}`);
         }
-        return fetcher.fetch(request.uri, {
+        console.log(`[doip] Fetching proof: ${request.fetcher} ${request.uri} (format: ${request.format})`);
+        const data = await fetcher.fetch(request.uri, {
             format: request.format,
             timeout: opts.timeout ?? DEFAULT_TIMEOUT,
             headers: request.options?.headers,
         });
+        const fileKeys = data && typeof data === "object" && "files" in data
+            ? Object.keys(data.files)
+            : [];
+        console.log(`[doip] Fetched proof, files: ${JSON.stringify(fileKeys)}`);
+        return data;
     }
     checkProof(data, targets) {
         const proofPatterns = this.generateProofPatterns();
+        console.log(`[doip] Checking proof for DID ${this._did}, patterns: ${JSON.stringify(proofPatterns)}`);
+        console.log(`[doip] Proof targets: ${JSON.stringify(targets.map((t) => t.path.join(".")))}`);
         for (const target of targets) {
             const values = this.extractValues(data, target.path);
+            console.log(`[doip] Target ${target.path.join(".")}: found ${values.length} value(s)${values.length > 0 ? `: ${JSON.stringify(values.map((v) => v.slice(0, 100)))}` : ""}`);
             for (const value of values) {
                 if (this.matchesPattern(value, proofPatterns, target.relation)) {
+                    console.log(`[doip] Match found at ${target.path.join(".")} (relation: ${target.relation})`);
                     return true;
                 }
             }
         }
+        console.log(`[doip] No match found in any target`);
         return false;
     }
     generateProofPatterns() {

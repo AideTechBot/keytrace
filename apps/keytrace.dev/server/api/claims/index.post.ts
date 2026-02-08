@@ -37,18 +37,31 @@ export default defineEventHandler(async (event) => {
       createdAt: new Date().toISOString(),
     }
 
+    console.log(`[claims] Creating record: repo=${did} collection=${COLLECTION_NSID}`)
+    console.log(`[claims] Record:`, JSON.stringify(record))
+
     const result = await agent.com.atproto.repo.createRecord({
       repo: did,
       collection: COLLECTION_NSID,
       record,
     })
 
+    console.log(`[claims] Success: uri=${result.data.uri} cid=${result.data.cid}`)
+
     return {
       uri: result.data.uri,
       cid: result.data.cid,
       record,
     }
-  } catch {
+  } catch (err: unknown) {
+    console.error(`[claims] Failed to create claim record:`, err)
+    if (err && typeof err === "object" && "status" in err) {
+      console.error(`[claims] HTTP status: ${(err as any).status}`)
+    }
+    if (err && typeof err === "object" && "headers" in err) {
+      const wwwAuth = (err as any).headers?.get?.("www-authenticate") ?? (err as any).headers?.["www-authenticate"]
+      if (wwwAuth) console.error(`[claims] WWW-Authenticate: ${wwwAuth}`)
+    }
     throw createError({
       statusCode: 500,
       statusMessage: "Failed to create claim record",

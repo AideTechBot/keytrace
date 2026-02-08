@@ -1,4 +1,5 @@
 import type { H3Event } from "h3"
+import { Agent } from "@atproto/api"
 import { verifySignedDid, getOAuthClient } from "./oauth"
 
 /**
@@ -31,9 +32,13 @@ export async function getSessionAgent(event: H3Event) {
   const did = requireAuth(event)
   const client = getOAuthClient()
   try {
+    console.log(`[session] Restoring OAuth session for ${did}`)
     const oauthSession = await client.restore(did)
-    return { did, agent: oauthSession }
-  } catch {
+    const agent = new Agent(oauthSession)
+    console.log(`[session] Session restored successfully`)
+    return { did, agent }
+  } catch (err) {
+    console.error(`[session] Failed to restore OAuth session:`, err)
     throw createError({
       statusCode: 500,
       statusMessage: "Failed to restore OAuth session",

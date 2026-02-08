@@ -11,7 +11,8 @@ export default defineEventHandler(async (event) => {
   try {
     const client = getOAuthClient()
     const url = await client.authorize(handle, {
-      scope: "atproto",
+    scope: "atproto repo:dev.keytrace.claim?action=create repo:dev.keytrace.claim?action=delete",
+
     })
 
     return sendRedirect(event, url.toString())

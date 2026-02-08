@@ -23,8 +23,11 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
+    console.log(`[verify] Starting verification: uri=${body.claimUri} did=${body.did}`)
     const claim = new Claim(body.claimUri, body.did)
     const result = await claim.verify({ timeout: 10_000 })
+
+    console.log(`[verify] Result: status=${result.status} errors=${JSON.stringify(result.errors)} matches=${JSON.stringify(claim.matches.map((m) => m.provider.id))}`)
 
     return {
       uri: claim.uri,
@@ -38,6 +41,7 @@ export default defineEventHandler(async (event) => {
       })),
     }
   } catch (err: unknown) {
+    console.error(`[verify] Error:`, err)
     if (err instanceof Error && err.message.includes("Invalid DID")) {
       throw createError({ statusCode: 400, statusMessage: "Invalid DID format" })
     }

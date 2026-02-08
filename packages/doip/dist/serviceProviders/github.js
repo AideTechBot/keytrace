@@ -31,6 +31,12 @@ const github = {
                     },
                 },
                 target: [
+                    // Check keytrace.json file content
+                    {
+                        path: ["files", "keytrace.json", "content"],
+                        relation: "contains",
+                        format: "text",
+                    },
                     // Check proof.md file content
                     {
                         path: ["files", "proof.md", "content"],

@@ -26,6 +26,9 @@ export default defineNuxtConfig({
   },
 
   vite: {
+    resolve: {
+      dedupe: ["vue"],
+    },
     server: {
       allowedHosts: [".ngrok-free.app"],
     },

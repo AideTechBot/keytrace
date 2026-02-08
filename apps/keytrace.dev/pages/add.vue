@@ -170,6 +170,7 @@ const currentStep = ref(0)
 const selectedService = ref<(ServiceOption & { inputLabel?: string; inputPlaceholder?: string; instructions?: string[]; proofTemplate?: string }) | null>(null)
 const claimUri = ref("")
 const claimUriError = ref("")
+const claimId = ref("")
 
 const stepLabels = ["Choose service", "Create proof", "Verify"]
 
@@ -188,7 +189,7 @@ const services: (ServiceOption & { inputLabel: string; inputPlaceholder: string;
       "Paste the verification content below into the file",
       "Save the gist and paste the URL below",
     ],
-    proofTemplate: '{\n  "keytrace": "{did}"\n}',
+    proofTemplate: '{\n  "keytrace": "{claimId}",\n  "did": "{did}"\n}',
   },
   {
     id: "dns-txt",
@@ -210,15 +211,24 @@ const services: (ServiceOption & { inputLabel: string; inputPlaceholder: string;
 
 const proofContent = computed(() => {
   const template = selectedService.value?.proofTemplate ?? ""
-  return template.replace(/\{did\}/g, session.value?.did ?? "did:plc:...")
+  return template
+    .replace(/\{claimId\}/g, claimId.value)
+    .replace(/\{did\}/g, session.value?.did ?? "did:plc:...")
 })
 
 const selectedInstructions = computed(() => selectedService.value?.instructions ?? [])
+
+function generateClaimId() {
+  const bytes = new Uint8Array(8)
+  crypto.getRandomValues(bytes)
+  return "kt-" + Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("")
+}
 
 function selectService(service: ServiceOption) {
   selectedService.value = services.find((s) => s.id === service.id) ?? null
   claimUri.value = ""
   claimUriError.value = ""
+  claimId.value = generateClaimId()
   currentStep.value = 1
 }
 
@@ -347,6 +357,7 @@ function reset() {
   selectedService.value = null
   claimUri.value = ""
   claimUriError.value = ""
+  claimId.value = ""
   verificationSteps.value = []
   verificationComplete.value = false
   verificationSuccess.value = false

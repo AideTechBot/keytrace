@@ -98,7 +98,7 @@ export function getClientMetadata() {
       "refresh_token",
     ],
     response_types: ["code"] as ["code"],
-    scope: "atproto",
+    scope: "atproto repo:dev.keytrace.claim?action=create repo:dev.keytrace.claim?action=delete",
     token_endpoint_auth_method: "none" as const,
     application_type: "web" as const,
     dpop_bound_access_tokens: true,
