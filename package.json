@@ -12,8 +12,7 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "format": "oxfmt --write .",
-    "format:check": "oxfmt --check .",
-    "deploy": "yarn workspace keytrace.dev zip && scw function deploy namespace-id=6ae5a968-edd9-4c1b-be35-ea6c19797ba1 name=server runtime=node22 zip-file=apps/keytrace.dev/dist/function.zip"
+    "format:check": "oxfmt --check ."
   },
   "devDependencies": {
     "oxfmt": "^0.27.0",
