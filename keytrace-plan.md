@@ -532,7 +532,7 @@ export async function getKeytraceAgent(): Promise<Agent> {
     _agent = new Agent({ service: "https://bsky.social" });
     await _agent.login({
       identifier: config.keytraceDid,
-      password: config.keytraceAppPassword,
+      password: config.keytracePassword,
     });
   }
   return _agent;

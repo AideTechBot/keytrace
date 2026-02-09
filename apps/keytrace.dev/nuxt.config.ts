@@ -54,6 +54,6 @@ export default defineNuxtConfig({
     s3SecretAccessKey: "",
     s3Endpoint: "",
     keytraceDid: "",
-    keytraceAppPassword: "",
+    keytracePassword: "",
   },
 });

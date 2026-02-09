@@ -110,6 +110,7 @@ async function publishKeyToATProto(date: string, publicJwk: JsonWebKey): Promise
 /**
  * Get the strong ref (URI + CID) for today's key record.
  * Returns a local placeholder in dev mode (when not using S3).
+ * Ensures the key is published to ATProto if it doesn't exist yet.
  */
 export async function getTodaysKeyRef(): Promise<{
   uri: string;
@@ -128,16 +129,38 @@ export async function getTodaysKeyRef(): Promise<{
 
   const agent = await getKeytraceAgent();
 
-  const response = await agent.com.atproto.repo.getRecord({
-    repo: config.keytraceDid,
-    collection: "dev.keytrace.key",
-    rkey: today,
-  });
+  // Try to get existing record
+  try {
+    const response = await agent.com.atproto.repo.getRecord({
+      repo: config.keytraceDid,
+      collection: "dev.keytrace.key",
+      rkey: today,
+    });
 
-  return {
-    uri: response.data.uri,
-    cid: response.data.cid!,
-  };
+    return {
+      uri: response.data.uri,
+      cid: response.data.cid!,
+    };
+  } catch (e: any) {
+    // If record not found, ensure key exists and publish it
+    if (e.error === "RecordNotFound") {
+      const keyPair = await getOrCreateTodaysKey();
+      await publishKeyToATProto(today, keyPair.publicJwk);
+
+      // Fetch the newly published record to get its CID
+      const response = await agent.com.atproto.repo.getRecord({
+        repo: config.keytraceDid,
+        collection: "dev.keytrace.key",
+        rkey: today,
+      });
+
+      return {
+        uri: response.data.uri,
+        cid: response.data.cid!,
+      };
+    }
+    throw e;
+  }
 }
 
 // --- Storage helpers ---

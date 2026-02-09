@@ -14,7 +14,7 @@
     <Transition name="popover">
       <div
         v-if="isVisible"
-        class="absolute right-0 top-full mt-2 w-72 z-50"
+        class="absolute right-0 top-full mt-2 w-80 sm:w-96 z-50"
         @mouseenter="cancelHide"
         @mouseleave="hidePopoverDelayed"
       >
@@ -67,13 +67,7 @@
 
 <script setup lang="ts">
 import { RefreshCw as RefreshCwIcon, CheckCircle as CheckCircleIcon, XCircle as XCircleIcon } from "lucide-vue-next";
-
-interface VerificationStep {
-  action: string;
-  detail?: string;
-  status: "pending" | "running" | "success" | "error";
-  duration?: number;
-}
+import type { VerificationStep, ExpandableContent } from "./VerificationLog.vue";
 
 const props = defineProps<{
   claimUri: string;
@@ -150,6 +144,7 @@ async function runVerification() {
 
     // Step 2: Fetching proof
     steps.value[1] = { ...steps.value[1], status: "running" };
+    const step2Start = Date.now();
 
     const apiResult = await $fetch("/api/verify", {
       method: "POST",
@@ -159,17 +154,43 @@ async function runVerification() {
       },
     });
 
-    steps.value[1] = { ...steps.value[1], status: "success" };
+    // Build expandable content for the fetch step
+    const fetchExpandable: ExpandableContent | undefined = apiResult.proofDetails
+      ? {
+          url: apiResult.proofDetails.fetchUrl,
+          fetcher: apiResult.proofDetails.fetcher,
+          content: apiResult.proofDetails.content,
+        }
+      : undefined;
+
+    steps.value[1] = {
+      ...steps.value[1],
+      status: "success",
+      detail: "Proof retrieved",
+      duration: Date.now() - step2Start,
+      expandable: fetchExpandable,
+    };
 
     // Step 3: Checking for DID
     steps.value[2] = { ...steps.value[2], status: "running" };
+    const step3Start = Date.now();
     await new Promise((r) => setTimeout(r, 200));
+
+    // Build expandable content for the verification step
+    const verifyExpandable: ExpandableContent | undefined = apiResult.proofDetails
+      ? {
+          targets: apiResult.proofDetails.targets,
+          patterns: apiResult.proofDetails.patterns,
+        }
+      : undefined;
 
     if (apiResult.status === "verified") {
       steps.value[2] = {
         ...steps.value[2],
         status: "success",
         detail: "DID found in proof",
+        duration: Date.now() - step3Start,
+        expandable: verifyExpandable,
       };
       result.value = { status: "verified", errors: [] };
       emit("verified");
@@ -178,6 +199,8 @@ async function runVerification() {
         ...steps.value[2],
         status: "error",
         detail: "DID not found",
+        duration: Date.now() - step3Start,
+        expandable: verifyExpandable,
       };
       result.value = { status: "failed", errors: apiResult.errors || [] };
     }
