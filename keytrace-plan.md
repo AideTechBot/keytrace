@@ -655,7 +655,7 @@ Recipes are public, version-controlled instructions for how to verify a specific
       "properties": {
         "action": {
           "type": "string",
-          "knownValues": ["http-get", "http-paginate", "css-select", "json-path", "regex-match", "dns-txt"]
+          "knownValues": ["http-get", "http-paginate", "cssof the identity claims are public
         },
         "url": {
           "type": "string",

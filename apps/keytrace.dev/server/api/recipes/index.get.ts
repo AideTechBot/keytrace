@@ -12,7 +12,7 @@ export default defineEventHandler(async () => {
   return providers.map((provider) => ({
     id: provider.id,
     name: provider.name,
-    description: provider.description,
+    description: provider.ui.description,
     homepage: provider.homepage,
     isAmbiguous: provider.isAmbiguous ?? false,
   }));

@@ -48,17 +48,19 @@
     <div class="mt-12 bg-kt-card border border-zinc-800 rounded-lg p-6">
       <h2 class="text-sm font-semibold text-zinc-300 mb-3">How Verification Works</h2>
       <div class="text-sm text-zinc-400 space-y-3">
-        <p>Each recipe defines a specific way to verify ownership of an external identity. The process is fully transparent and reproducible:</p>
+        <p>Each Keytrace recipe defines a specific way to verify ownership of an external identity. The process is fully transparent and reproducible:</p>
         <ol class="list-decimal list-inside space-y-2 text-zinc-500">
           <li>You create a proof at the external service (e.g., a GitHub gist, DNS TXT record)</li>
           <li>The proof contains your ATProto DID to link the identities</li>
           <li>Keytrace fetches the proof from the public URL</li>
           <li>The runner checks if your DID is present in the expected location</li>
-          <li>If verified, keytrace signs an attestation and stores it in your ATProto repo</li>
+          <li>If verified, Keytrace signs an attestation and stores it in your ATProto repo</li>
         </ol>
         <p class="text-xs text-zinc-600 pt-2">Anyone can re-run verification using the same steps to independently confirm your claims.</p>
       </div>
     </div>
+
+    <a href="https://orta.io" target="_blank" class="mt-8 block text-right text-sm font-mono text-violet-400/80 hover:text-violet-400 transition-colors">./orta</a>
   </div>
 </template>
 
