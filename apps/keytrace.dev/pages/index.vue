@@ -108,7 +108,7 @@ const howItWorks = [
   },
 ];
 
-// Fetch recent verifications from the API
+// Fetch recent verifications from the API (show 20 on home page)
 const { data: recentClaims } = await useFetch("/api/recent-claims", {
   transform: (claims: any[]) =>
     claims.map((claim) => ({
