@@ -117,6 +117,7 @@ const { data: recentClaims } = await useFetch("/api/recent-claims", {
       displayName: claim.displayName,
       serviceType: claim.type,
       createdAt: claim.createdAt,
+      identity: claim.identity,
     })),
   default: () => [],
 });

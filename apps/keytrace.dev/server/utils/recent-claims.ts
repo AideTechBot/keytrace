@@ -1,5 +1,12 @@
 import { loadJson, saveJson } from "./storage";
 
+export interface RecentClaimIdentity {
+  subject: string;
+  avatarUrl?: string;
+  profileUrl?: string;
+  displayName?: string;
+}
+
 export interface RecentClaim {
   did: string;
   handle: string;
@@ -8,6 +15,7 @@ export interface RecentClaim {
   subject: string;
   displayName: string;
   createdAt: string;
+  identity?: RecentClaimIdentity;
 }
 
 const FEED_KEY = "recent-claims.json";

@@ -69,6 +69,8 @@ export default defineEventHandler(async (event) => {
   // Add to recent claims feed (best-effort, don't fail the request)
   try {
     const profile = await agent.getProfile({ actor: did }).catch(() => null);
+    // Extract identity name from subject (e.g., "github:octocat" -> "octocat")
+    const identityName = subject.includes(":") ? subject.split(":").pop() : subject;
     await addRecentClaim({
       did,
       handle: profile?.data.handle ?? did,
@@ -77,6 +79,10 @@ export default defineEventHandler(async (event) => {
       subject,
       displayName: type.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
       createdAt: new Date().toISOString(),
+      identity: {
+        subject: identityName ?? subject,
+        displayName: identityName,
+      },
     });
   } catch (error) {
     console.error("[attest] Failed to update recent claims feed:", error);

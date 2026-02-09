@@ -110,6 +110,12 @@ export default defineEventHandler(async (event) => {
         subject,
         displayName: identity.displayName ?? provider.id.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
         createdAt: record.createdAt,
+        identity: {
+          subject,
+          avatarUrl: identity.avatarUrl,
+          profileUrl: identity.profileUrl,
+          displayName: identity.displayName,
+        },
       });
     } catch (error) {
       console.error("[claims] Failed to update recent claims feed:", error);
