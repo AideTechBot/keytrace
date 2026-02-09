@@ -1,107 +1,113 @@
 <template>
   <div class="max-w-2xl mx-auto px-6 py-12">
-    <!-- Progress indicator -->
-    <WizardProgress :steps="stepLabels" :current-step="currentStep" class="mb-10" />
+    <!-- Invalid service -->
+    <div v-if="!selectedService && !loading" class="text-center py-12">
+      <h2 class="text-2xl font-semibold text-zinc-100">Service not found</h2>
+      <p class="mt-2 text-zinc-400 text-sm">The service "{{ serviceId }}" is not available.</p>
+      <NuxtLink to="/add" class="mt-6 inline-block px-5 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-lg transition-all">
+        Choose a service
+      </NuxtLink>
+    </div>
 
-    <!-- Step 1: Choose Service -->
-    <Transition name="slide" mode="out-in">
-      <div v-if="currentStep === 0" key="step-0">
-        <h2 class="text-2xl font-semibold text-zinc-100 tracking-tight">What would you like to link?</h2>
-        <p class="mt-2 text-zinc-400 text-sm">Choose an account or service to link to your identity.</p>
+    <!-- Valid service flow -->
+    <template v-else-if="selectedService">
+      <!-- Progress indicator -->
+      <WizardProgress :steps="stepLabels" :current-step="currentStep" class="mb-10" />
 
-        <div class="mt-8">
-          <ServicePicker :services="services" @select="selectService" />
-        </div>
-      </div>
+      <Transition name="slide" mode="out-in">
+        <!-- Step 1: Instructions + Proof -->
+        <div v-if="currentStep === 0" key="step-0">
+          <h2 class="text-2xl font-semibold text-zinc-100 tracking-tight">Create your proof</h2>
 
-      <!-- Step 2: Instructions + Proof -->
-      <div v-else-if="currentStep === 1" key="step-1">
-        <h2 class="text-2xl font-semibold text-zinc-100 tracking-tight">Create your proof</h2>
+          <ol class="mt-6 space-y-4">
+            <li v-for="(instruction, i) in selectedInstructions" :key="i" class="flex gap-3">
+              <span class="flex-shrink-0 w-6 h-6 rounded-full bg-zinc-800 text-zinc-500 text-xs flex items-center justify-center font-mono">
+                {{ i + 1 }}
+              </span>
+              <span class="text-sm text-zinc-300 pt-0.5">
+                <Markdown :content="instruction" />
+              </span>
+            </li>
+          </ol>
 
-        <ol class="mt-6 space-y-4">
-          <li v-for="(instruction, i) in selectedInstructions" :key="i" class="flex gap-3">
-            <span class="flex-shrink-0 w-6 h-6 rounded-full bg-zinc-800 text-zinc-500 text-xs flex items-center justify-center font-mono">
-              {{ i + 1 }}
-            </span>
-            <span class="text-sm text-zinc-300 pt-0.5">
-              <Markdown :content="instruction" />
-            </span>
-          </li>
-        </ol>
+          <!-- Proof content to copy -->
+          <div class="mt-6 relative">
+            <div class="rounded-lg bg-kt-inset border border-zinc-800 p-4 font-mono text-sm text-emerald-400 whitespace-pre-wrap break-all">{{ proofContent }}</div>
+            <div class="absolute top-3 right-3">
+              <CopyButton :value="proofContent" />
+            </div>
+          </div>
 
-        <!-- Proof content to copy -->
-        <div class="mt-6 relative">
-          <div class="rounded-lg bg-kt-inset border border-zinc-800 p-4 font-mono text-sm text-emerald-400 whitespace-pre-wrap break-all">{{ proofContent }}</div>
-          <div class="absolute top-3 right-3">
-            <CopyButton :value="proofContent" />
+          <!-- Claim URI input -->
+          <div class="mt-6">
+            <KtInput v-model="claimUri" :label="selectedService?.inputLabel ?? 'Claim URL'" :placeholder="selectedService?.inputPlaceholder ?? 'https://...'" />
+            <p v-if="claimUriError" class="mt-1.5 text-xs text-failed">
+              {{ claimUriError }}
+            </p>
+          </div>
+
+          <div class="mt-8 flex items-center gap-3">
+            <NuxtLink to="/add" class="px-4 py-2 text-sm text-zinc-400 hover:text-zinc-200 transition-colors">&larr; Back</NuxtLink>
+            <button
+              class="px-6 py-2.5 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-lg transition-all hover:shadow-glow-brand disabled:opacity-50 disabled:cursor-not-allowed"
+              :disabled="!claimUri"
+              @click="startVerification"
+            >
+              Verify
+            </button>
           </div>
         </div>
 
-        <!-- Claim URI input -->
-        <div class="mt-6">
-          <KtInput v-model="claimUri" :label="selectedService?.inputLabel ?? 'Claim URL'" :placeholder="selectedService?.inputPlaceholder ?? 'https://...'" />
-          <p v-if="claimUriError" class="mt-1.5 text-xs text-failed">
-            {{ claimUriError }}
-          </p>
-        </div>
+        <!-- Step 2: Verification -->
+        <div v-else-if="currentStep === 1" key="step-1">
+          <h2 class="text-2xl font-semibold text-zinc-100 tracking-tight mb-6">Verifying your claim</h2>
 
-        <div class="mt-8 flex items-center gap-3">
-          <button class="px-4 py-2 text-sm text-zinc-400 hover:text-zinc-200 transition-colors" @click="currentStep = 0">&larr; Back</button>
-          <button
-            class="px-6 py-2.5 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-lg transition-all hover:shadow-glow-brand disabled:opacity-50 disabled:cursor-not-allowed"
-            :disabled="!claimUri"
-            @click="startVerification"
-          >
-            Verify
-          </button>
-        </div>
-      </div>
+          <VerificationLog :steps="verificationSteps" />
 
-      <!-- Step 3: Verification -->
-      <div v-else-if="currentStep === 2" key="step-2">
-        <h2 class="text-2xl font-semibold text-zinc-100 tracking-tight mb-6">Verifying your claim</h2>
-
-        <VerificationLog :steps="verificationSteps" />
-
-        <!-- Success state -->
-        <div v-if="verificationComplete && verificationSuccess" class="text-center py-8">
-          <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-verified/10 mb-4 animate-verify-ring">
-            <CheckCircleIcon class="w-8 h-8 text-verified animate-verify-check" />
+          <!-- Success state -->
+          <div v-if="verificationComplete && verificationSuccess" class="text-center py-8">
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-verified/10 mb-4 animate-verify-ring">
+              <CheckCircleIcon class="w-8 h-8 text-verified animate-verify-check" />
+            </div>
+            <h3 class="text-xl font-semibold text-zinc-100">Claim linked</h3>
+            <p class="text-sm text-zinc-400 mt-2">Your identity proof has been verified and stored in your ATProto repo.</p>
+            <div class="mt-6 flex items-center justify-center gap-3">
+              <NuxtLink :to="`/@${session?.handle}`" class="px-5 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-lg transition-all">
+                View Your Profile
+              </NuxtLink>
+              <NuxtLink to="/add" class="px-5 py-2 text-sm text-zinc-400 hover:text-zinc-200 transition-colors">Add another</NuxtLink>
+            </div>
           </div>
-          <h3 class="text-xl font-semibold text-zinc-100">Claim linked</h3>
-          <p class="text-sm text-zinc-400 mt-2">Your identity proof has been verified and stored in your ATProto repo.</p>
-          <div class="mt-6 flex items-center justify-center gap-3">
-            <NuxtLink :to="`/@${session?.handle}`" class="px-5 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-lg transition-all">
-              View Your Profile
-            </NuxtLink>
-            <button class="px-5 py-2 text-sm text-zinc-400 hover:text-zinc-200 transition-colors" @click="reset">Add another</button>
+
+          <!-- Failure state -->
+          <div v-else-if="verificationComplete && !verificationSuccess" class="text-center py-8">
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-failed/10 mb-4">
+              <XCircleIcon class="w-8 h-8 text-failed" />
+            </div>
+            <h3 class="text-xl font-semibold text-zinc-100">Verification failed</h3>
+            <p class="text-sm text-zinc-400 mt-2 max-w-sm mx-auto">
+              {{ verificationError || "We could not verify your proof. Please check your setup and try again." }}
+            </p>
+            <div class="mt-6 flex items-center justify-center gap-3">
+              <button class="px-5 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-lg transition-all" @click="currentStep = 0">Try again</button>
+              <NuxtLink to="/add" class="px-5 py-2 text-sm text-zinc-400 hover:text-zinc-200 transition-colors">Start over</NuxtLink>
+            </div>
           </div>
         </div>
-
-        <!-- Failure state -->
-        <div v-else-if="verificationComplete && !verificationSuccess" class="text-center py-8">
-          <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-failed/10 mb-4">
-            <XCircleIcon class="w-8 h-8 text-failed" />
-          </div>
-          <h3 class="text-xl font-semibold text-zinc-100">Verification failed</h3>
-          <p class="text-sm text-zinc-400 mt-2 max-w-sm mx-auto">
-            {{ verificationError || "We could not verify your proof. Please check your setup and try again." }}
-          </p>
-          <div class="mt-6 flex items-center justify-center gap-3">
-            <button class="px-5 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-lg transition-all" @click="currentStep = 1">Try again</button>
-            <button class="px-5 py-2 text-sm text-zinc-400 hover:text-zinc-200 transition-colors" @click="reset">Start over</button>
-          </div>
-        </div>
-      </div>
-    </Transition>
+      </Transition>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
 import { Github, Globe, AtSign, Cloud, CheckCircle as CheckCircleIcon, XCircle as XCircleIcon } from "lucide-vue-next";
+import NpmIcon from "~/components/icons/NpmIcon.vue";
 import type { ServiceOption } from "~/components/ui/ServicePicker.vue";
 import type { VerificationStep, ExpandableContent } from "~/components/ui/VerificationLog.vue";
 import type { ProofDetails } from "@keytrace/runner";
+
+const route = useRoute();
+const serviceId = computed(() => route.params.service as string);
 
 const { session } = useSession();
 
@@ -117,7 +123,7 @@ watch(
 );
 
 // Fetch services from API
-const { data: servicesData } = await useFetch("/api/services");
+const { data: servicesData, pending: loading } = await useFetch("/api/services");
 
 // Map icon names to components
 const iconMap: Record<string, unknown> = {
@@ -125,6 +131,7 @@ const iconMap: Record<string, unknown> = {
   globe: Globe,
   "at-sign": AtSign,
   cloud: Cloud,
+  npm: NpmIcon,
 };
 
 // Transform API response into ServiceOption format
@@ -137,6 +144,7 @@ interface ServiceFromAPI {
     icon: string;
     inputLabel: string;
     inputPlaceholder: string;
+    inputDefaultTemplate?: string;
     instructions: string[];
     proofTemplate: string;
   };
@@ -145,6 +153,7 @@ interface ServiceFromAPI {
 interface ServiceWithUI extends ServiceOption {
   inputLabel: string;
   inputPlaceholder: string;
+  inputDefaultTemplate?: string;
   instructions: string[];
   proofTemplate: string;
 }
@@ -158,31 +167,52 @@ const services = computed<ServiceWithUI[]>(() => {
     icon: iconMap[s.ui.icon] ?? Globe,
     inputLabel: s.ui.inputLabel,
     inputPlaceholder: s.ui.inputPlaceholder,
+    inputDefaultTemplate: s.ui.inputDefaultTemplate,
     instructions: s.ui.instructions,
     proofTemplate: s.ui.proofTemplate,
   }));
 });
 
+// Auto-select service based on route param
+const selectedService = computed(() => services.value.find((s) => s.id === serviceId.value) ?? null);
+
 const currentStep = ref(0);
-const selectedService = ref<ServiceWithUI | null>(null);
 const claimUri = ref("");
 const claimUriError = ref("");
+// Generate a stable claim ID for this session
+const claimId = ref(crypto.randomUUID());
 
-const stepLabels = ["Choose service", "Create proof", "Verify"];
+// Two-step flow for direct service pages
+const stepLabels = ["Create proof", "Verify"];
+
+// Pre-fill claim URI when service is available
+watch(
+  selectedService,
+  (service) => {
+    if (service?.inputDefaultTemplate) {
+      const handle = session.value?.handle ?? "handle";
+      const slugHandle = handle.replace(/\./g, "-").toLowerCase();
+      claimUri.value = service.inputDefaultTemplate
+        .replace(/\{did\}/g, session.value?.did ?? "")
+        .replace(/\{handle\}/g, handle)
+        .replace(/\{slugHandle\}/g, slugHandle);
+    }
+  },
+  { immediate: true },
+);
 
 const proofContent = computed(() => {
   const template = selectedService.value?.proofTemplate ?? "";
-  return template.replace(/\{did\}/g, session.value?.did ?? "did:plc:...").replace(/\{handle\}/g, session.value?.handle ?? "handle");
+  const handle = session.value?.handle ?? "handle";
+  const slugHandle = handle.replace(/\./g, "-").toLowerCase();
+  return template
+    .replace(/\{did\}/g, session.value?.did ?? "did:plc:...")
+    .replace(/\{handle\}/g, handle)
+    .replace(/\{slugHandle\}/g, slugHandle)
+    .replace(/\{claimId\}/g, claimId.value);
 });
 
 const selectedInstructions = computed(() => selectedService.value?.instructions ?? []);
-
-function selectService(service: ServiceOption) {
-  selectedService.value = services.value.find((s) => s.id === service.id) ?? null;
-  claimUri.value = "";
-  claimUriError.value = "";
-  currentStep.value = 1;
-}
 
 // Verification state
 const verificationSteps = ref<VerificationStep[]>([]);
@@ -196,7 +226,7 @@ async function startVerification() {
     return;
   }
   claimUriError.value = "";
-  currentStep.value = 2;
+  currentStep.value = 1;
   verificationComplete.value = false;
   verificationSuccess.value = false;
   verificationError.value = "";
@@ -323,16 +353,5 @@ async function startVerification() {
     verificationSuccess.value = false;
     verificationError.value = err?.data?.statusMessage || "Verification failed. Please try again.";
   }
-}
-
-function reset() {
-  currentStep.value = 0;
-  selectedService.value = null;
-  claimUri.value = "";
-  claimUriError.value = "";
-  verificationSteps.value = [];
-  verificationComplete.value = false;
-  verificationSuccess.value = false;
-  verificationError.value = "";
 }
 </script>

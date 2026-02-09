@@ -10,6 +10,7 @@
           :alt="claim.identity.displayName || claim.identity.subject || 'Avatar'"
           class="w-8 h-8 rounded-full object-cover"
         />
+        <component v-else-if="claim.serviceType === 'npm'" :is="serviceIcon" class="w-7 h-7 text-zinc-300" />
         <div v-else class="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center">
           <component :is="serviceIcon" class="w-4 h-4 text-zinc-300" />
         </div>
@@ -42,11 +43,7 @@
       </a>
 
       <div class="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500">
-        <NuxtLink
-          v-if="claim.serviceType"
-          :to="`/recipes/${claim.serviceType}`"
-          class="hover:text-zinc-300 transition-colors"
-        >
+        <NuxtLink v-if="claim.serviceType" :to="`/recipes/${claim.serviceType}`" class="hover:text-zinc-300 transition-colors">
           via {{ claim.recipeName || claim.serviceType }}
         </NuxtLink>
         <span v-else-if="claim.recipeName">via {{ claim.recipeName }}</span>
@@ -76,6 +73,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { Github, Globe, AtSign, Key } from "lucide-vue-next";
+import NpmIcon from "~/components/icons/NpmIcon.vue";
 
 export interface ClaimIdentity {
   subject?: string;
@@ -113,6 +111,7 @@ const serviceIcons: Record<string, any> = {
   dns: Globe,
   mastodon: AtSign,
   fediverse: AtSign,
+  npm: NpmIcon,
 };
 
 const serviceIcon = computed(() => serviceIcons[props.claim.serviceType ?? ""] ?? Key);

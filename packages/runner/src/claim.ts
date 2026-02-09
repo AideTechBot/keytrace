@@ -256,9 +256,18 @@ function extractValuesRecursive(data: unknown, path: string[], index: number, re
 
   const key = path[index];
 
-  if (key === "*" && Array.isArray(data)) {
-    for (const item of data) {
-      extractValuesRecursive(item, path, index + 1, results);
+  if (key === "*") {
+    if (Array.isArray(data)) {
+      // Wildcard for arrays: iterate all items
+      for (const item of data) {
+        extractValuesRecursive(item, path, index + 1, results);
+      }
+    } else if (typeof data === "object" && data !== null) {
+      // Wildcard for objects: iterate all values
+      const record = data as Record<string, unknown>;
+      for (const value of Object.values(record)) {
+        extractValuesRecursive(value, path, index + 1, results);
+      }
     }
   } else if (typeof data === "object" && data !== null) {
     const record = data as Record<string, unknown>;

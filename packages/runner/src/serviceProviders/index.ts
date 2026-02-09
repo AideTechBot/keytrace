@@ -2,6 +2,7 @@ import github from "./github.js";
 import dns from "./dns.js";
 import activitypub from "./activitypub.js";
 import bsky from "./bsky.js";
+import npm from "./npm.js";
 import type { ServiceProvider, ServiceProviderMatch } from "./types.js";
 
 export type { ServiceProvider, ServiceProviderMatch, ServiceProviderUI, ProofTarget, ProofRequest, ProcessedURI } from "./types.js";
@@ -11,6 +12,7 @@ const providers: Record<string, ServiceProvider> = {
   dns,
   activitypub,
   bsky,
+  npm,
 };
 
 /**
@@ -60,4 +62,4 @@ export function getProofTextForProvider(providerId: string, did: string, handle?
   return provider?.getProofText(did, handle);
 }
 
-export { github, dns, activitypub, bsky };
+export { github, dns, activitypub, bsky, npm };

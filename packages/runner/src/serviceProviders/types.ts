@@ -64,6 +64,8 @@ export interface ServiceProviderUI {
   inputLabel: string;
   /** Placeholder text for the claim URI input */
   inputPlaceholder: string;
+  /** Default value template for input. Supports {did}, {handle}, {slugHandle} placeholders */
+  inputDefaultTemplate?: string;
   /** Step-by-step instructions (markdown supported) */
   instructions: string[];
   /** Template for proof content. Supports {did} and {handle} placeholders */
