@@ -1,8 +1,6 @@
 import crypto from "node:crypto";
-import fs from "node:fs";
-import path from "node:path";
-import { S3Client, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getKeytraceAgent } from "./keytrace-agent";
+import { useS3, loadJson, saveJson } from "./storage";
 
 export interface KeyPair {
   privateKey: crypto.KeyObject;
@@ -163,85 +161,12 @@ export async function getTodaysKeyRef(): Promise<{
   }
 }
 
-// --- Storage helpers ---
-
-function useS3(): boolean {
-  return Boolean(useRuntimeConfig().s3Bucket);
-}
-
-function getS3Client(): S3Client {
-  const config = useRuntimeConfig();
-  return new S3Client({
-    region: config.s3Region || "fr-par",
-    endpoint: config.s3Endpoint || `https://s3.${config.s3Region || "fr-par"}.scw.cloud`,
-    credentials: {
-      accessKeyId: config.s3AccessKeyId,
-      secretAccessKey: config.s3SecretAccessKey,
-    },
-    forcePathStyle: true,
-  });
-}
+// --- Storage helpers (using shared storage utilities) ---
 
 async function loadKeyFromStorage(key: string): Promise<JsonWebKey | null> {
-  if (useS3()) {
-    return loadKeyFromS3(key);
-  }
-  return loadKeyFromFile(key);
+  return loadJson<JsonWebKey>(key);
 }
 
 async function saveKeyToStorage(key: string, jwk: JsonWebKey): Promise<void> {
-  if (useS3()) {
-    return saveKeyToS3(key, jwk);
-  }
-  return saveKeyToFile(key, jwk);
-}
-
-async function loadKeyFromS3(key: string): Promise<JsonWebKey | null> {
-  try {
-    const config = useRuntimeConfig();
-    const response = await getS3Client().send(
-      new GetObjectCommand({
-        Bucket: config.s3Bucket,
-        Key: key,
-      }),
-    );
-    const body = await response.Body?.transformToString();
-    return body ? JSON.parse(body) : null;
-  } catch (e: any) {
-    if (e.name === "NoSuchKey") return null;
-    throw e;
-  }
-}
-
-async function saveKeyToS3(key: string, jwk: JsonWebKey): Promise<void> {
-  const config = useRuntimeConfig();
-  await getS3Client().send(
-    new PutObjectCommand({
-      Bucket: config.s3Bucket,
-      Key: key,
-      Body: JSON.stringify(jwk),
-      ContentType: "application/json",
-    }),
-  );
-}
-
-const DATA_DIR = path.join(process.cwd(), ".data");
-
-function loadKeyFromFile(key: string): JsonWebKey | null {
-  const filePath = path.join(DATA_DIR, key);
-  try {
-    const content = fs.readFileSync(filePath, "utf-8");
-    return JSON.parse(content);
-  } catch {
-    return null;
-  }
-}
-
-function saveKeyToFile(key: string, jwk: JsonWebKey): void {
-  const filePath = path.join(DATA_DIR, key);
-  const dir = path.dirname(filePath);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  fs.writeFileSync(filePath, JSON.stringify(jwk), "utf-8");
+  return saveJson(key, jwk);
 }

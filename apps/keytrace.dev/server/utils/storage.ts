@@ -3,6 +3,14 @@ import path from "node:path";
 import { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import type { NodeSavedSession, NodeSavedSessionStore, NodeSavedState, NodeSavedStateStore } from "@atproto/oauth-client-node";
 
+// --- Shared storage utilities ---
+
+export const DATA_DIR = path.join(process.cwd(), ".data");
+
+export function useS3(): boolean {
+  return Boolean(useRuntimeConfig().s3Bucket);
+}
+
 function getS3Config() {
   const config = useRuntimeConfig();
   return {
@@ -16,7 +24,7 @@ function getS3Config() {
 
 let _s3Client: S3Client | null = null;
 
-function getS3Client(): S3Client {
+export function getS3Client(): S3Client {
   if (!_s3Client) {
     const config = getS3Config();
     _s3Client = new S3Client({
@@ -30,6 +38,62 @@ function getS3Client(): S3Client {
     });
   }
   return _s3Client;
+}
+
+/**
+ * Load JSON data from storage (S3 in production, file in development).
+ * Returns null if the key doesn't exist.
+ */
+export async function loadJson<T>(key: string): Promise<T | null> {
+  if (useS3()) {
+    try {
+      const response = await getS3Client().send(
+        new GetObjectCommand({
+          Bucket: getS3Config().bucket,
+          Key: key,
+        }),
+      );
+      const body = await response.Body?.transformToString();
+      return body ? JSON.parse(body) : null;
+    } catch (e: any) {
+      if (e.name === "NoSuchKey") return null;
+      throw e;
+    }
+  }
+
+  // File storage
+  const filePath = path.join(DATA_DIR, key);
+  try {
+    const content = fs.readFileSync(filePath, "utf-8");
+    return JSON.parse(content);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Save JSON data to storage (S3 in production, file in development).
+ */
+export async function saveJson<T>(key: string, data: T): Promise<void> {
+  if (useS3()) {
+    await getS3Client().send(
+      new PutObjectCommand({
+        Bucket: getS3Config().bucket,
+        Key: key,
+        Body: JSON.stringify(data),
+        ContentType: "application/json",
+      }),
+    );
+    return;
+  }
+
+  // File storage
+  const filePath = path.join(DATA_DIR, key);
+  const dir = path.dirname(filePath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
 }
 
 // S3-based storage for production
@@ -114,7 +178,6 @@ class S3StateStore implements NodeSavedStateStore {
 }
 
 // File-based storage for local development
-const DATA_DIR = path.join(process.cwd(), ".data");
 
 class FileSessionStore implements NodeSavedSessionStore {
   private file = path.join(DATA_DIR, "sessions.json");
@@ -193,12 +256,11 @@ class FileStateStore implements NodeSavedStateStore {
 }
 
 export function createSessionStore(): NodeSavedSessionStore {
-  const useS3 = Boolean(useRuntimeConfig().s3Bucket);
-  console.log(useS3 ? `Session storage: S3 (${useRuntimeConfig().s3Bucket})` : "Session storage: File (.data/)");
-  return useS3 ? new S3SessionStore() : new FileSessionStore();
+  const s3Enabled = useS3();
+  console.log(s3Enabled ? `Session storage: S3 (${useRuntimeConfig().s3Bucket})` : "Session storage: File (.data/)");
+  return s3Enabled ? new S3SessionStore() : new FileSessionStore();
 }
 
 export function createStateStore(): NodeSavedStateStore {
-  const useS3 = Boolean(useRuntimeConfig().s3Bucket);
-  return useS3 ? new S3StateStore() : new FileStateStore();
+  return useS3() ? new S3StateStore() : new FileStateStore();
 }

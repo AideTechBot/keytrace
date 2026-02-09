@@ -8,6 +8,7 @@
 import { COLLECTION_NSID, serviceProviders, createClaim, verifyClaim, ClaimStatus } from "@keytrace/runner";
 import { getSessionAgent } from "~/server/utils/session";
 import { createAttestation } from "~/server/utils/attestation";
+import { addRecentClaim } from "~/server/utils/recent-claims";
 
 export default defineEventHandler(async (event) => {
   const { did, agent } = await getSessionAgent(event);
@@ -84,6 +85,7 @@ export default defineEventHandler(async (event) => {
       sig,
       comment: body.comment,
       createdAt: new Date().toISOString(),
+      prerelease: true,
     };
 
     console.log(`[claims] Creating record: repo=${did} collection=${COLLECTION_NSID}`);
@@ -96,6 +98,22 @@ export default defineEventHandler(async (event) => {
     });
 
     console.log(`[claims] Success: uri=${result.data.uri} cid=${result.data.cid}`);
+
+    // Add to recent claims feed (best-effort, don't fail the request)
+    try {
+      const profile = await agent.getProfile({ actor: did }).catch(() => null);
+      await addRecentClaim({
+        did,
+        handle: profile?.data.handle ?? did,
+        avatar: profile?.data.avatar,
+        type: provider.id,
+        subject,
+        displayName: identity.displayName ?? provider.id.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+        createdAt: record.createdAt,
+      });
+    } catch (error) {
+      console.error("[claims] Failed to update recent claims feed:", error);
+    }
 
     return {
       uri: result.data.uri,

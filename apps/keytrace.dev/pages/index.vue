@@ -22,7 +22,7 @@
         </div>
 
         <h1 class="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-zinc-100 leading-[1.1]">
-          Prove who you are,<br />
+          You be you,<br />
           <span class="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-emerald-400"> everywhere. </span>
         </h1>
 
@@ -108,35 +108,16 @@ const howItWorks = [
   },
 ];
 
-// Placeholder data for recent verifications
-const recentClaims = [
-  {
-    handle: "orta.bsky.social",
-    avatar: "",
-    displayName: "GitHub Account",
-    serviceType: "github",
-    createdAt: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
-  },
-  {
-    handle: "alice.bsky.social",
-    avatar: "",
-    displayName: "orta.io",
-    serviceType: "domain",
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-  },
-  {
-    handle: "bob.bsky.social",
-    avatar: "",
-    displayName: "GitHub Account",
-    serviceType: "github",
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
-  },
-  {
-    handle: "carol.bsky.social",
-    avatar: "",
-    displayName: "mastodon.social/@carol",
-    serviceType: "mastodon",
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-  },
-];
+// Fetch recent verifications from the API
+const { data: recentClaims } = await useFetch("/api/recent-claims", {
+  transform: (claims: any[]) =>
+    claims.map((claim) => ({
+      handle: claim.handle,
+      avatar: claim.avatar,
+      displayName: claim.displayName,
+      serviceType: claim.type,
+      createdAt: claim.createdAt,
+    })),
+  default: () => [],
+});
 </script>
