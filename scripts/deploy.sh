@@ -43,19 +43,23 @@ PACKAGES=("packages/runner" "packages/verify" "packages/lexicon")
 
 for pkg in "${PACKAGES[@]}"; do
   echo "==> Updating $pkg to $NEW_VERSION..."
-  cd "$pkg"
-  npm version "$NEW_VERSION" --no-git-tag-version
-  cd - > /dev/null
+  node -e "
+    const fs = require('fs');
+    const pkg = JSON.parse(fs.readFileSync('$pkg/package.json', 'utf8'));
+    pkg.version = '$NEW_VERSION';
+    fs.writeFileSync('$pkg/package.json', JSON.stringify(pkg, null, 2) + '\n');
+  "
 done
 
-echo "==> Building all packages..."
+echo "==> Installing dependencies and building..."
+yarn install
 yarn build
 
 echo "==> Publishing to npm..."
 for pkg in "${PACKAGES[@]}"; do
   echo "    Publishing $pkg..."
   cd "$pkg"
-  yarn npm publish --access public
+  npm publish --access public
   cd - > /dev/null
 done
 
