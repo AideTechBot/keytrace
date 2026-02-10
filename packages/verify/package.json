@@ -1,6 +1,6 @@
 {
   "name": "@keytrace/verify",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Verify keytrace identity claims",
   "files": [
     "src",
