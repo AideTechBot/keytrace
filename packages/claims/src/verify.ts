@@ -2,6 +2,9 @@ import type { ClaimRecord, ClaimVerificationResult, ES256PublicJwk, KeyRecord, S
 import { resolveHandle, resolvePds, listClaimRecords, getRecordByUri } from "./atproto.js";
 import { verifyES256Signature } from "./crypto/signature.js";
 
+/** Default trusted signer handles */
+const DEFAULT_TRUSTED_SIGNERS = ["keytrace.dev"];
+
 // Re-export types for convenience
 export type {
   ClaimIdentity,
@@ -41,6 +44,10 @@ export async function getClaimsForHandle(handle: string, options?: VerifyOptions
  * @returns Verification results for all claims
  */
 export async function getClaimsForDid(did: string, options?: VerifyOptions): Promise<VerificationResult> {
+  // Resolve trusted signer handles to DIDs once for the whole batch
+  const trustedSigners = options?.trustedSigners ?? DEFAULT_TRUSTED_SIGNERS;
+  const trustedDids = await resolveTrustedDids(trustedSigners, options);
+
   // Resolve PDS for the user
   const pdsUrl = await resolvePds(did, options);
 
@@ -61,7 +68,7 @@ export async function getClaimsForDid(did: string, options?: VerifyOptions): Pro
   const claimResults: ClaimVerificationResult[] = [];
 
   for (const record of claimRecords) {
-    const result = await verifySingleClaim(did, record.uri, record.rkey, record.value, options);
+    const result = await verifySingleClaim(did, record.uri, record.rkey, record.value, trustedDids, options);
     claimResults.push(result);
   }
 
@@ -79,7 +86,7 @@ export async function getClaimsForDid(did: string, options?: VerifyOptions): Pro
 /**
  * Verify a single claim's signature.
  */
-async function verifySingleClaim(did: string, uri: string, rkey: string, claim: ClaimRecord, options?: VerifyOptions): Promise<ClaimVerificationResult> {
+async function verifySingleClaim(did: string, uri: string, rkey: string, claim: ClaimRecord, trustedDids: Set<string>, options?: VerifyOptions): Promise<ClaimVerificationResult> {
   const steps: VerificationStep[] = [];
 
   try {
@@ -94,7 +101,16 @@ async function verifySingleClaim(did: string, uri: string, rkey: string, claim: 
     }
     steps.push({ step: "validate_claim", success: true, detail: "Claim structure valid" });
 
-    // Step 2: Fetch the signing key
+    // Step 2: Validate signing key is from a trusted signer
+    const signerDid = extractDidFromAtUri(claim.sig.src);
+    if (!signerDid || !trustedDids.has(signerDid)) {
+      const error = `Signing key is not from a trusted signer (source: ${claim.sig.src})`;
+      steps.push({ step: "validate_signer", success: false, error });
+      return buildResult(uri, rkey, claim, false, steps, error);
+    }
+    steps.push({ step: "validate_signer", success: true, detail: `Signing key from trusted signer (${signerDid})` });
+
+    // Step 3: Fetch the signing key
     let keyRecord: KeyRecord;
     try {
       keyRecord = await getRecordByUri<KeyRecord>(claim.sig.src, options);
@@ -105,7 +121,7 @@ async function verifySingleClaim(did: string, uri: string, rkey: string, claim: 
       return buildResult(uri, rkey, claim, false, steps, error);
     }
 
-    // Step 3: Parse the public JWK
+    // Step 4: Parse the public JWK
     let publicJwk: ES256PublicJwk;
     try {
       publicJwk = JSON.parse(keyRecord.publicJwk) as ES256PublicJwk;
@@ -119,7 +135,7 @@ async function verifySingleClaim(did: string, uri: string, rkey: string, claim: 
       return buildResult(uri, rkey, claim, false, steps, error);
     }
 
-    // Step 4: Reconstruct the signed claim data
+    // Step 5: Reconstruct the signed claim data
     const signedData: SignedClaimData = {
       did,
       subject: claim.identity.subject,
@@ -132,7 +148,7 @@ async function verifySingleClaim(did: string, uri: string, rkey: string, claim: 
       detail: `Reconstructed signed data for ${claim.type}:${claim.identity.subject}`,
     });
 
-    // Step 5: Verify the signature
+    // Step 6: Verify the signature
     const isValid = await verifyES256Signature(signedData, claim.sig.attestation, publicJwk);
 
     if (isValid) {
@@ -164,4 +180,30 @@ function buildResult(uri: string, rkey: string, claim: ClaimRecord, verified: bo
     identity: claim.identity,
     claim,
   };
+}
+
+/**
+ * Extract the DID from an AT URI (at://did/collection/rkey)
+ */
+function extractDidFromAtUri(atUri: string): string | null {
+  const match = atUri.match(/^at:\/\/([^/]+)\//);
+  return match?.[1] ?? null;
+}
+
+/**
+ * Resolve an array of handles to their DIDs.
+ */
+async function resolveTrustedDids(handles: string[], options?: VerifyOptions): Promise<Set<string>> {
+  const dids = new Set<string>();
+  await Promise.all(
+    handles.map(async (handle) => {
+      try {
+        const did = await resolveHandle(handle, options);
+        dids.add(did);
+      } catch {
+        // Skip handles that fail to resolve
+      }
+    }),
+  );
+  return dids;
 }

@@ -2,7 +2,55 @@ import { AtpAgent } from "@atproto/api";
 import { createClaim, verifyClaim, type ClaimState } from "./claim.js";
 import { ClaimStatus } from "./types.js";
 import { COLLECTION_NSID, PUBLIC_API_URL, PLC_DIRECTORY_URL } from "./constants.js";
-import type { ProfileData, ClaimData, VerifyOptions, IdentityMetadata } from "./types.js";
+import type { ProfileData, ClaimData, VerifyOptions, IdentityMetadata, ProfileOptions } from "./types.js";
+
+/** Default trusted signer handles */
+const DEFAULT_TRUSTED_SIGNERS = ["keytrace.dev"];
+
+/**
+ * Extract the DID from an AT URI (at://did/collection/rkey)
+ */
+function extractDidFromAtUri(atUri: string): string | null {
+  const match = atUri.match(/^at:\/\/([^/]+)\//);
+  return match?.[1] ?? null;
+}
+
+/**
+ * Resolve an array of handles to their DIDs via the public API.
+ */
+async function resolveTrustedDids(handles: string[]): Promise<Set<string>> {
+  const dids = new Set<string>();
+  const publicAgent = new AtpAgent({ service: PUBLIC_API_URL });
+  await Promise.all(
+    handles.map(async (handle) => {
+      try {
+        const resolved = await publicAgent.resolveHandle({ handle });
+        dids.add(resolved.data.did);
+      } catch {
+        console.debug(`[runner] Failed to resolve trusted signer handle: ${handle}`);
+      }
+    }),
+  );
+  return dids;
+}
+
+/**
+ * Check whether a claim's signing key is from a trusted signer.
+ * Returns an error message if untrusted, or null if trusted.
+ */
+function checkSignerTrust(sigSrc: string | undefined, trustedDids: Set<string>): string | null {
+  if (!sigSrc) {
+    return "Claim has no signing key reference";
+  }
+  const signerDid = extractDidFromAtUri(sigSrc);
+  if (!signerDid) {
+    return `Invalid signing key URI: ${sigSrc}`;
+  }
+  if (!trustedDids.has(signerDid)) {
+    return `Signing key is not from a trusted signer (DID: ${signerDid})`;
+  }
+  return null;
+}
 
 /**
  * DID document service entry
@@ -76,7 +124,10 @@ function parseAtUriRkey(atUri: string): string {
 /**
  * Internal: fetch profile data using an already-configured agent
  */
-async function fetchWithAgent(agent: AtpAgent, did: string): Promise<FetchedProfile> {
+async function fetchWithAgent(agent: AtpAgent, did: string, opts?: ProfileOptions): Promise<FetchedProfile> {
+  const trustedSigners = opts?.trustedSigners ?? DEFAULT_TRUSTED_SIGNERS;
+  const trustedDids = await resolveTrustedDids(trustedSigners);
+
   // Fetch Bluesky profile for display info via public API (not PDS)
   // The PDS doesn't serve app.bsky.actor.getProfile - only the AppView does
   let bskyProfile: { handle: string; displayName?: string; avatar?: string } | null = null;
@@ -115,6 +166,7 @@ async function fetchWithAgent(agent: AtpAgent, did: string): Promise<FetchedProf
           comment?: string;
           createdAt?: string;
           identity?: IdentityMetadata;
+          sig?: { src?: string };
         };
         if (value.claimUri) {
           claims.push({
@@ -125,6 +177,7 @@ async function fetchWithAgent(agent: AtpAgent, did: string): Promise<FetchedProf
             createdAt: value.createdAt ?? new Date().toISOString(),
             rkey: parseAtUriRkey(record.uri),
             identity: value.identity,
+            sig: value.sig,
           });
         }
       }
@@ -138,20 +191,33 @@ async function fetchWithAgent(agent: AtpAgent, did: string): Promise<FetchedProf
     }
   }
 
+  // Build claim instances, marking untrusted signers as FAILED
+  const claimInstances = claims.map((c) => {
+    const state = createClaim(c.uri, did);
+    const trustError = checkSignerTrust(c.sig?.src, trustedDids);
+    if (trustError) {
+      state.status = ClaimStatus.FAILED;
+      state.errors.push(trustError);
+    }
+    return state;
+  });
+
   return {
     did,
     handle: bskyProfile?.handle ?? did,
     displayName: bskyProfile?.displayName,
     avatar: bskyProfile?.avatar,
     claims,
-    claimInstances: claims.map((c) => createClaim(c.uri, did)),
+    claimInstances,
   };
 }
 
 /**
  * Fetch a profile from ATProto by DID or handle
  */
-export async function fetchProfile(didOrHandle: string, serviceUrl?: string): Promise<FetchedProfile> {
+export async function fetchProfile(didOrHandle: string, opts?: ProfileOptions): Promise<FetchedProfile> {
+  const serviceUrl = opts?.serviceUrl;
+
   // Resolve PDS from DID document unless an explicit serviceUrl was provided
   let resolvedServiceUrl: string;
   let did = didOrHandle;
@@ -179,19 +245,40 @@ export async function fetchProfile(didOrHandle: string, serviceUrl?: string): Pr
         resolvedServiceUrl = pdsUrl;
         // Re-create agent pointed at the user's actual PDS
         const pdsAgent = new AtpAgent({ service: pdsUrl });
-        return fetchWithAgent(pdsAgent, did);
+        return fetchWithAgent(pdsAgent, did, opts);
       }
     }
   }
 
-  return fetchWithAgent(agent, did);
+  return fetchWithAgent(agent, did, opts);
 }
 
 /**
- * Verify all claims in a profile
+ * Verify all claims in a profile.
+ * Claims whose signing key is not from a trusted signer are marked as FAILED
+ * without running proof verification.
  */
 export async function verifyAllClaims(profile: FetchedProfile, opts?: VerifyOptions): Promise<void> {
-  await Promise.all(profile.claimInstances.map((claim) => verifyClaim(claim, opts)));
+  const trustedSigners = opts?.trustedSigners ?? DEFAULT_TRUSTED_SIGNERS;
+  const trustedDids = await resolveTrustedDids(trustedSigners);
+
+  await Promise.all(
+    profile.claimInstances.map(async (claim, i) => {
+      // Skip claims already marked as failed (e.g. by fetchProfile signer check)
+      if (claim.status === ClaimStatus.FAILED) return;
+
+      // Check signing key provenance
+      const claimData = profile.claims[i];
+      const trustError = checkSignerTrust(claimData?.sig?.src, trustedDids);
+      if (trustError) {
+        claim.status = ClaimStatus.FAILED;
+        claim.errors.push(trustError);
+        return;
+      }
+
+      await verifyClaim(claim, opts);
+    }),
+  );
 }
 
 /**

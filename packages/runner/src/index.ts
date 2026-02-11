@@ -17,6 +17,7 @@ export type {
   ProfileData,
   ClaimData,
   VerifyOptions,
+  ProfileOptions,
   IdentityMetadata,
   ProofDetails,
   ProofTargetResult,
