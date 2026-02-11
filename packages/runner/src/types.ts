@@ -73,6 +73,8 @@ export interface ClaimData {
   createdAt: string;
   rkey: string;
   identity?: IdentityMetadata;
+  /** Signing key reference from the claim record */
+  sig?: { src?: string };
 }
 
 /**
@@ -85,6 +87,18 @@ export interface VerifyOptions {
   skipCache?: boolean;
   /** Proxy URL for browser-based DNS/HTTP requests */
   proxyUrl?: string;
+  /** Trusted signer handles whose signing keys are accepted (default: ["keytrace.dev"]) */
+  trustedSigners?: string[];
+}
+
+/**
+ * Options for profile fetching
+ */
+export interface ProfileOptions {
+  /** ATProto service URL override */
+  serviceUrl?: string;
+  /** Trusted signer handles whose signing keys are accepted (default: ["keytrace.dev"]) */
+  trustedSigners?: string[];
 }
 
 /**

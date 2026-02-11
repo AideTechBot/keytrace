@@ -130,4 +130,6 @@ export interface VerifyOptions {
   plcDirectoryUrl?: string;
   /** Public ATProto API URL for handle resolution (default: https://public.api.bsky.app) */
   publicApiUrl?: string;
+  /** Trusted signer handles whose signing keys are accepted (default: ["keytrace.dev"]) */
+  trustedSigners?: string[];
 }

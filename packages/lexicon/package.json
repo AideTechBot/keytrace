@@ -1,11 +1,16 @@
 {
   "name": "@keytrace/lexicon",
-  "version": "0.0.4",
+  "version": "0.0.10",
   "files": [
     "lexicons"
   ],
   "type": "module",
   "exports": {
     "./lexicons/*": "./lexicons/*"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/orta/keytrace",
+    "directory": "packages/lexicon"
   }
 }
