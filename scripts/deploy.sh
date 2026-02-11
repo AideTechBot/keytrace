@@ -55,25 +55,15 @@ echo "==> Installing dependencies and building..."
 yarn install
 yarn build
 
-echo "==> Publishing to npm..."
-for pkg in "${PACKAGES[@]}"; do
-  echo "    Publishing $pkg..."
-  cd "$pkg"
-  npm publish --access public
-  cd - > /dev/null
-done
-
- echo "==> (Not yet) Deploying lexicons to ATProto via goat..."
-# npx @atproto/goat lexicon publish packages/lexicon/lexicons/
-
 echo "==> Creating git tag v$NEW_VERSION..."
 git add .
 git commit -m "Release v$NEW_VERSION"
 git tag "v$NEW_VERSION"
 
-echo "==> Pushing to git..."
+echo "==> Pushing to git (tag push triggers npm publish via GitHub Actions)..."
 git push
 git push --tags
 
 echo ""
-echo "Deploy complete! Version $NEW_VERSION published and pushed."
+echo "Done! v$NEW_VERSION tagged and pushed."
+echo "npm publish will run via GitHub Actions: https://github.com/orta/keytrace/actions"
