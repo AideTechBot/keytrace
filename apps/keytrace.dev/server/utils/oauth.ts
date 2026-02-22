@@ -65,23 +65,36 @@ function isLoopback(url: string): boolean {
   return url.startsWith("http://localhost") || url.startsWith("http://127.0.0.1");
 }
 
+const PRODUCTION_URL = "https://keytrace.dev";
+
 export function getClientMetadata() {
   const publicUrl = getPublicUrl();
-
-  // ATProto OAuth has different rules for dev vs production:
-  // - client_id must use http://localhost (not IP) for loopback dev
-  // - redirect_uris must use http://127.0.0.1 (not localhost) per RFC 8252
-  // - production requires HTTPS for both
   const loopback = isLoopback(publicUrl);
 
-  const clientIdBase = loopback ? "http://localhost" : publicUrl;
-  const redirectBase = loopback ? publicUrl.replace("http://localhost", "http://127.0.0.1") : publicUrl;
+  if (loopback) {
+    // Dev mode: use production keytrace.dev as client_id so the PDS can fetch
+    // valid metadata. The dev-callback route on production forwards to localhost.
+    return {
+      client_id: `${PRODUCTION_URL}/.well-known/oauth-client-metadata.json`,
+      client_name: "keytrace.dev",
+      client_uri: PRODUCTION_URL,
+      redirect_uris: [`${PRODUCTION_URL}/oauth/dev-callback`] as [string],
+      grant_types: ["authorization_code", "refresh_token"] as ["authorization_code", "refresh_token"],
+      response_types: ["code"] as ["code"],
+      scope: OAUTH_SCOPE,
+      token_endpoint_auth_method: "none" as const,
+      application_type: "web" as const,
+      dpop_bound_access_tokens: true,
+    };
+  }
 
+  // Production: include both the normal callback and dev-callback in redirect_uris
+  // so the PDS accepts either when validating the client metadata
   return {
-    client_id: `${clientIdBase}/.well-known/oauth-client-metadata.json`,
+    client_id: `${publicUrl}/.well-known/oauth-client-metadata.json`,
     client_name: "keytrace.dev",
     client_uri: publicUrl,
-    redirect_uris: [`${redirectBase}/oauth/callback`] as [string],
+    redirect_uris: [`${publicUrl}/oauth/callback`, `${publicUrl}/oauth/dev-callback`] as [string, string],
     grant_types: ["authorization_code", "refresh_token"] as ["authorization_code", "refresh_token"],
     response_types: ["code"] as ["code"],
     scope: OAUTH_SCOPE,
