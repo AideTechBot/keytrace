@@ -148,6 +148,20 @@ async function fetchWithAgent(agent: AtpAgent, did: string, opts?: ProfileOption
     }
   }
 
+  // Fetch keytrace profile record (dev.keytrace.profile/self) for bio/displayName overrides
+  let ktProfile: { displayName?: string; bio?: string } | null = null;
+  try {
+    const record = await agent.com.atproto.repo.getRecord({
+      repo: did,
+      collection: "dev.keytrace.profile",
+      rkey: "self",
+    });
+    const value = record.data.value as { displayName?: string; bio?: string };
+    ktProfile = value;
+  } catch {
+    // No keytrace profile record — that's fine
+  }
+
   // List all claim records with cursor-based pagination
   const claims: ClaimData[] = [];
   try {
@@ -212,8 +226,8 @@ async function fetchWithAgent(agent: AtpAgent, did: string, opts?: ProfileOption
   return {
     did,
     handle: bskyProfile?.handle ?? did,
-    displayName: bskyProfile?.displayName,
-    description: bskyProfile?.description,
+    displayName: ktProfile?.displayName || bskyProfile?.displayName,
+    description: ktProfile?.bio || bskyProfile?.description,
     avatar: bskyProfile?.avatar,
     claims,
     claimInstances,
