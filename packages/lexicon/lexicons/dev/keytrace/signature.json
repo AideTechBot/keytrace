@@ -29,7 +29,6 @@
           "type": "string",
           "format": "datetime",
           "description": "Datetime when this signature was retracted. Present only if the signature has been retracted (ISO 8601)."
-          "description": "The cryptographic signature (JWS compact serialization)"
         },
         "signedFields": {
           "type": "array",

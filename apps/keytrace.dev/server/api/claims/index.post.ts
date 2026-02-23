@@ -57,7 +57,7 @@ export default defineEventHandler(async (event) => {
 
   // Build the signature object per dev.keytrace.signature lexicon
   const sig = {
-    kid: new Date().toISOString().split("T")[0], // YYYY-MM-DD
+    kid: "attest:" + provider.id,
     src: attestation.signingKey.uri,
     signedAt: attestation.signedAt,
     attestation: attestation.sig,
@@ -84,7 +84,7 @@ export default defineEventHandler(async (event) => {
       type: provider.id,
       claimUri: body.claimUri,
       identity,
-      sig,
+      sigs: [sig],
       comment: body.comment,
       status: "verified",
       lastVerifiedAt: now,

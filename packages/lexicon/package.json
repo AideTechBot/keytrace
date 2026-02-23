@@ -2,15 +2,24 @@
   "name": "@keytrace/lexicon",
   "version": "0.1.0",
   "files": [
-    "lexicons"
+    "lexicons",
+    "types"
   ],
   "type": "module",
   "exports": {
-    "./lexicons/*": "./lexicons/*"
+    "./lexicons/*": "./lexicons/*",
+    "./types": "./types/index.js",
+    "./types/*": "./types/*"
+  },
+  "scripts": {
+    "codegen": "lex gen-api --yes ./types ./lexicons/dev/keytrace/*"
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/orta/keytrace",
     "directory": "packages/lexicon"
+  },
+  "devDependencies": {
+    "@atproto/lex-cli": "^0.9.8"
   }
 }

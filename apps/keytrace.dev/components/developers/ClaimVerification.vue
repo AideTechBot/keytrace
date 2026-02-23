@@ -54,10 +54,10 @@
               <!-- validate_claim: Show signature structure -->
               <template v-if="step.step === 'validate_claim'">
                 <div class="bg-zinc-900 border border-zinc-800 rounded p-2 overflow-x-auto">
-                  <pre class="text-xs font-mono text-zinc-400"><span class="text-zinc-500">claim.sig = </span>{
-  <span class="text-violet-400">src</span>: <span class="text-green-400">"{{ truncate(claim.claim.sig.src, 50) }}"</span>,
-  <span class="text-violet-400">signedAt</span>: <span class="text-green-400">"{{ claim.claim.sig.signedAt }}"</span>,
-  <span class="text-violet-400">attestation</span>: <span class="text-green-400">"{{ truncate(claim.claim.sig.attestation, 40) }}..."</span>
+                  <pre class="text-xs font-mono text-zinc-400"><span class="text-zinc-500">claim.sigs[0] = </span>{
+  <span class="text-violet-400">src</span>: <span class="text-green-400">"{{ truncate(primarySig?.src ?? '', 50) }}"</span>,
+  <span class="text-violet-400">signedAt</span>: <span class="text-green-400">"{{ primarySig?.signedAt }}"</span>,
+  <span class="text-violet-400">attestation</span>: <span class="text-green-400">"{{ truncate(primarySig?.attestation ?? '', 40) }}..."</span>
 }</pre>
                 </div>
               </template>
@@ -66,7 +66,7 @@
               <template v-else-if="step.step === 'fetch_key'">
                 <div class="bg-zinc-900 border border-zinc-800 rounded p-2 overflow-x-auto">
                   <pre class="text-xs font-mono"><span class="text-zinc-500">// Fetched from AT URI:</span>
-<a :href="`https://pdsls.dev/${claim.claim.sig.src}`" target="_blank" rel="noopener" class="text-violet-400 hover:text-violet-300 underline">{{ claim.claim.sig.src }}</a>
+<a :href="`https://pdsls.dev/${primarySig?.src}`" target="_blank" rel="noopener" class="text-violet-400 hover:text-violet-300 underline">{{ primarySig?.src }}</a>
 
 <span class="text-zinc-500">// Returns KeyRecord with publicJwk</span></pre>
                 </div>
@@ -101,7 +101,7 @@
   <span class="text-violet-400">did</span>: <span class="text-green-400">"{{ did }}"</span>,
   <span class="text-violet-400">subject</span>: <span class="text-green-400">"{{ claim.identity.subject }}"</span>,
   <span class="text-violet-400">type</span>: <span class="text-green-400">"{{ claim.type }}"</span>,
-  <span class="text-violet-400">verifiedAt</span>: <span class="text-green-400">"{{ claim.claim.sig.signedAt }}"</span>
+  <span class="text-violet-400">verifiedAt</span>: <span class="text-green-400">"{{ primarySig?.signedAt }}"</span>
 }</pre>
                 </div>
               </template>
@@ -113,7 +113,7 @@
 <span class="text-violet-400">header</span>.<span class="text-yellow-400">payload</span>.<span class="text-green-400">signature</span>
 
 <span class="text-zinc-500">// Attestation:</span>
-{{ formatJws(claim.claim.sig.attestation) }}
+{{ formatJws(primarySig?.attestation ?? '') }}
 
 <span class="text-zinc-500">// Verification:</span>
 <span class="text-verified">crypto.subtle.verify("ES256", publicKey, signature, payload)</span></pre>
@@ -135,6 +135,7 @@
 <script setup lang="ts">
 import { Check as CheckIcon, X as XIcon, ChevronDown as ChevronDownIcon } from "lucide-vue-next";
 import type { ClaimVerificationResult } from "@keytrace/claims";
+import { getPrimarySig } from "@keytrace/claims";
 
 interface ES256PublicJwk {
   kty: string;
@@ -153,6 +154,9 @@ const expanded = ref(props.defaultExpanded ?? false);
 const keyData = ref<ES256PublicJwk | null>(null);
 const keyLoading = ref(false);
 
+/** Primary signature from the claim record (supports both old sig and new sigs format) */
+const primarySig = computed(() => getPrimarySig(props.claim.claim));
+
 // Fetch the key when expanded
 watch(expanded, async (isExpanded) => {
   if (isExpanded && !keyData.value && !keyLoading.value) {
@@ -168,12 +172,13 @@ onMounted(async () => {
 });
 
 async function fetchKey() {
-  if (!props.claim.claim.sig?.src) return;
+  const sigSrc = primarySig.value?.src;
+  if (!sigSrc) return;
 
   keyLoading.value = true;
   try {
     // Parse AT URI: at://did:plc:xxx/collection/rkey
-    const atUri = props.claim.claim.sig.src;
+    const atUri = sigSrc;
     const match = atUri.match(/^at:\/\/([^/]+)\/([^/]+)\/([^/]+)$/);
     if (!match) return;
 

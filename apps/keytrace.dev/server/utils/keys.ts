@@ -72,7 +72,7 @@ function jwkToKeyPair(jwk: JsonWebKey): KeyPair {
 }
 
 /**
- * Publish a public key to keytrace's ATProto repo as a dev.keytrace.key record.
+ * Publish a public key to keytrace's ATProto repo as a dev.keytrace.serverPublicKey record.
  * Record key = date (YYYY-MM-DD).
  * Skipped in local dev mode (when not using S3).
  */
@@ -88,10 +88,10 @@ async function publishKeyToATProto(date: string, publicJwk: JsonWebKey): Promise
 
     await agent.com.atproto.repo.putRecord({
       repo: config.keytraceDid,
-      collection: "dev.keytrace.key",
+      collection: "dev.keytrace.serverPublicKey",
       rkey: date,
       record: {
-        $type: "dev.keytrace.key",
+        $type: "dev.keytrace.serverPublicKey",
         publicJwk: JSON.stringify(publicJwk),
         validFrom: `${date}T00:00:00.000Z`,
         validUntil: `${date}T23:59:59.999Z`,
@@ -131,7 +131,7 @@ export async function getTodaysKeyRef(): Promise<{
   try {
     const response = await agent.com.atproto.repo.getRecord({
       repo: config.keytraceDid,
-      collection: "dev.keytrace.key",
+      collection: "dev.keytrace.serverPublicKey",
       rkey: today,
     });
 
@@ -148,7 +148,7 @@ export async function getTodaysKeyRef(): Promise<{
       // Fetch the newly published record to get its CID
       const response = await agent.com.atproto.repo.getRecord({
         repo: config.keytraceDid,
-        collection: "dev.keytrace.key",
+        collection: "dev.keytrace.serverPublicKey",
         rkey: today,
       });
 

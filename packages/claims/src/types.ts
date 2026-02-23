@@ -20,27 +20,45 @@ export interface ClaimSignature {
   signedAt: string;
   /** JWS compact serialization */
   attestation: string;
+  /** Ordered list of field names included in the signed payload */
+  signedFields?: string[];
+  /** Datetime when this signature was retracted (ISO 8601) */
+  retractedAt?: string;
 }
 
 /**
- * Raw claim record from ATProto
+ * Raw claim record from ATProto.
+ * Supports both legacy format (sig: single object) and new format (sigs: array).
  */
 export interface ClaimRecord {
   $type: "dev.keytrace.claim";
   type: string;
   claimUri: string;
   identity: ClaimIdentity;
-  sig: ClaimSignature;
+  /** @deprecated Use sigs array instead. Retained for backwards compatibility with old records. */
+  sig?: ClaimSignature;
+  /** One or more cryptographic attestation signatures from verification services */
+  sigs?: ClaimSignature[];
   comment?: string;
   createdAt: string;
   prerelease?: boolean;
+  nonce?: string;
+  retractedAt?: string;
 }
 
 /**
- * Public key record from keytrace service
+ * Get the primary signature from a claim record (supports both old and new format).
+ */
+export function getPrimarySig(record: { sigs?: ClaimSignature[]; sig?: ClaimSignature }): ClaimSignature | undefined {
+  return record.sigs?.[0] ?? record.sig;
+}
+
+/**
+ * Public key record from keytrace service.
+ * Supports both old (dev.keytrace.key) and new (dev.keytrace.serverPublicKey) collection names.
  */
 export interface KeyRecord {
-  $type: "dev.keytrace.key";
+  $type: "dev.keytrace.key" | "dev.keytrace.serverPublicKey";
   publicJwk: string;
   validFrom: string;
   validUntil: string;

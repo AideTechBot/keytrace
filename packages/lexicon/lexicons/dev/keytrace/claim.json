@@ -42,11 +42,6 @@
             "description": "Current verification status of this claim. Absent on legacy records, treated as 'verified'.",
             "knownValues": ["verified", "failed", "retracted"]
           },
-          "statusSig": {
-            "type": "ref",
-            "ref": "dev.keytrace.signature#main",
-            "description": "Cryptographic attestation for the current status fields. Proves status/lastVerifiedAt/failedAt were set by the keytrace service, not tampered with."
-          },
           "lastVerifiedAt": {
             "type": "string",
             "format": "datetime",
