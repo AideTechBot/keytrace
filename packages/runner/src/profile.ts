@@ -7,6 +7,12 @@ import type { ProfileData, ClaimData, VerifyOptions, IdentityMetadata, ProfileOp
 /** Default trusted signer handles */
 const DEFAULT_TRUSTED_SIGNERS = ["keytrace.dev"];
 
+/** Find the attestation sig (kid starting with "attest:"), falling back to first sig or legacy sig */
+function getAttestSrc(sigs?: Array<{ kid?: string; src?: string }>, sig?: { src?: string }): string | undefined {
+  const attest = sigs?.find((s) => s.kid?.startsWith("attest:"));
+  return attest?.src ?? sigs?.[0]?.src ?? sig?.src;
+}
+
 /**
  * Extract the DID from an AT URI (at://did/collection/rkey)
  */
@@ -182,6 +188,7 @@ async function fetchWithAgent(agent: AtpAgent, did: string, opts?: ProfileOption
           createdAt?: string;
           identity?: IdentityMetadata;
           sig?: { src?: string };
+          sigs?: Array<{ kid?: string; src?: string }>;
           status?: "verified" | "failed" | "retracted";
           lastVerifiedAt?: string;
           failedAt?: string;
@@ -195,7 +202,8 @@ async function fetchWithAgent(agent: AtpAgent, did: string, opts?: ProfileOption
             createdAt: value.createdAt ?? new Date().toISOString(),
             rkey: parseAtUriRkey(record.uri),
             identity: value.identity,
-            sig: value.sig,
+            sig: value.sigs?.find((s) => s.kid?.startsWith("attest:")) ?? value.sigs?.[0] ?? value.sig,
+            sigs: value.sigs,
             status: value.status,
             lastVerifiedAt: value.lastVerifiedAt,
             failedAt: value.failedAt,
@@ -215,7 +223,7 @@ async function fetchWithAgent(agent: AtpAgent, did: string, opts?: ProfileOption
   // Build claim instances, marking untrusted signers as FAILED
   const claimInstances = claims.map((c) => {
     const state = createClaim(c.uri, did);
-    const trustError = checkSignerTrust(c.sig?.src, trustedDids);
+    const trustError = checkSignerTrust(getAttestSrc(c.sigs, c.sig), trustedDids);
     if (trustError) {
       state.status = ClaimStatus.FAILED;
       state.errors.push(trustError);
@@ -291,7 +299,7 @@ export async function verifyAllClaims(profile: FetchedProfile, opts?: VerifyOpti
 
       // Check signing key provenance
       const claimData = profile.claims[i];
-      const trustError = checkSignerTrust(claimData?.sig?.src, trustedDids);
+      const trustError = checkSignerTrust(claimData ? getAttestSrc(claimData.sigs, claimData.sig) : undefined, trustedDids);
       if (trustError) {
         claim.status = ClaimStatus.FAILED;
         claim.errors.push(trustError);

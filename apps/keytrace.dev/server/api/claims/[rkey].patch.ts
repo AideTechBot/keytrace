@@ -66,16 +66,32 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  // Sign over the status fields so they can't be tampered with
+  // Sign over the status fields so they can't be tampered with.
+  // The status signature is appended to the sigs array with kid: "status".
   const statusAt = record.status === "verified" ? record.lastVerifiedAt : record.failedAt;
   const statusAttestation = await createStatusAttestation(did, claimUri, record.status, statusAt);
-  record.statusSig = {
-    kid: new Date().toISOString().split("T")[0],
+
+  const statusSig = {
+    kid: "status",
     src: statusAttestation.signingKey.uri,
     signedAt: statusAttestation.signedAt,
     attestation: statusAttestation.sig,
     signedFields: statusAttestation.signedFields,
   };
+
+  // Ensure sigs array exists (handles old records that only had `sig`), then
+  // replace any existing status entry or append a new one.
+  if (!Array.isArray(record.sigs)) record.sigs = record.sig ? [record.sig] : [];
+
+  const existingIdx = record.sigs.findIndex((s: any) => s.kid === "status");
+  if (existingIdx >= 0) {
+    record.sigs[existingIdx] = statusSig;
+  } else {
+    record.sigs.push(statusSig);
+  }
+
+  // Clean up legacy statusSig field if present
+  delete record.statusSig;
 
   try {
     const res = await agent.com.atproto.repo.putRecord({

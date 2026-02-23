@@ -2,7 +2,7 @@
  * Backfill public keys to keytrace's ATProto repository.
  *
  * Reads existing keys from S3 storage and publishes them to ATProto
- * as dev.keytrace.key records.
+ * as dev.keytrace.serverPublicKey records.
  *
  * Usage:
  *   node --env-file=.env scripts/backfill-keys.ts [date...]
@@ -77,7 +77,7 @@ async function keyExistsInATProto(agent: AtpAgent, date: string): Promise<boolea
   try {
     await agent.com.atproto.repo.getRecord({
       repo: env.keytraceDid,
-      collection: "dev.keytrace.key",
+      collection: "dev.keytrace.serverPublicKey",
       rkey: date,
     });
     return true;
@@ -89,10 +89,10 @@ async function keyExistsInATProto(agent: AtpAgent, date: string): Promise<boolea
 async function publishKeyToATProto(agent: AtpAgent, date: string, publicJwk: JsonWebKey): Promise<void> {
   await agent.com.atproto.repo.putRecord({
     repo: env.keytraceDid,
-    collection: "dev.keytrace.key",
+    collection: "dev.keytrace.serverPublicKey",
     rkey: date,
     record: {
-      $type: "dev.keytrace.key",
+      $type: "dev.keytrace.serverPublicKey",
       publicJwk: JSON.stringify(publicJwk),
       validFrom: `${date}T00:00:00.000Z`,
       validUntil: `${date}T23:59:59.999Z`,

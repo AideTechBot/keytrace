@@ -20,27 +20,47 @@ export interface ClaimSignature {
   signedAt: string;
   /** JWS compact serialization */
   attestation: string;
+  /** Ordered list of field names included in the signed payload */
+  signedFields?: string[];
+  /** Datetime when this signature was retracted (ISO 8601) */
+  retractedAt?: string;
 }
 
 /**
- * Raw claim record from ATProto
+ * Raw claim record from ATProto.
+ * Supports both legacy format (sig: single object) and new format (sigs: array).
  */
 export interface ClaimRecord {
   $type: "dev.keytrace.claim";
   type: string;
   claimUri: string;
   identity: ClaimIdentity;
-  sig: ClaimSignature;
+  /** @deprecated Use sigs array instead. Retained for backwards compatibility with old records. */
+  sig?: ClaimSignature;
+  /** One or more cryptographic attestation signatures from verification services */
+  sigs?: ClaimSignature[];
   comment?: string;
   createdAt: string;
   prerelease?: boolean;
+  nonce?: string;
+  retractedAt?: string;
 }
 
 /**
- * Public key record from keytrace service
+ * Get the attestation signature from a claim record.
+ * Looks for a sig with kid starting with "attest:", falls back to sigs[0] or legacy sig field.
+ */
+export function getPrimarySig(record: { sigs?: ClaimSignature[]; sig?: ClaimSignature }): ClaimSignature | undefined {
+  const attestSig = record.sigs?.find((s) => s.kid?.startsWith("attest:"));
+  return attestSig ?? record.sigs?.[0] ?? record.sig;
+}
+
+/**
+ * Public key record from keytrace service.
+ * Supports both old (dev.keytrace.key) and new (dev.keytrace.serverPublicKey) collection names.
  */
 export interface KeyRecord {
-  $type: "dev.keytrace.key";
+  $type: "dev.keytrace.key" | "dev.keytrace.serverPublicKey";
   publicJwk: string;
   validFrom: string;
   validUntil: string;
@@ -57,14 +77,11 @@ export interface ES256PublicJwk {
 }
 
 /**
- * Claim data that is signed (canonical form)
+ * Claim data that is signed (canonical form).
+ * New format uses record field names: claimUri, did, identity.subject, type.
+ * Legacy format used: did, subject, type, verifiedAt.
  */
-export interface SignedClaimData {
-  did: string;
-  subject: string;
-  type: string;
-  verifiedAt: string;
-}
+export type SignedClaimData = Record<string, string>;
 
 /**
  * Verification step detail for debugging/auditing

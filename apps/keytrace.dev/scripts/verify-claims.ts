@@ -6,7 +6,7 @@
  * Example: npx tsx scripts/verify-claims.ts kitten.sh
  */
 
-import { getClaimsForHandle } from "@keytrace/claims";
+import { getClaimsForHandle, getPrimarySig } from "@keytrace/claims";
 
 const COLORS = {
   reset: "\x1b[0m",
@@ -94,7 +94,8 @@ async function main() {
       }
 
       // Signature info
-      console.log(`  ${c("dim", "Signed at:")} ${claim.claim.sig.signedAt}`);
+      const sig = getPrimarySig(claim.claim);
+      console.log(`  ${c("dim", "Signed at:")} ${sig?.signedAt ?? "unknown"}`);
       console.log(`  ${c("dim", "Record:")}    at://${result.did}/dev.keytrace.claim/${claim.rkey}`);
     }
 

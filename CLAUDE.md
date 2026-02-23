@@ -38,7 +38,7 @@ yarn format:check     # Check formatting
 
 - **`packages/runner`** - Core verification library (`@keytrace/runner`). Recipe-based claim verification with service providers for GitHub, DNS, ActivityPub, Bluesky, npm, PGP, Tangled.
 - **`packages/claims`** - Client-side claim verification library (`@keytrace/claims`). ES256 signature verification, ATProto record fetching.
-- **`packages/lexicon`** - ATProto lexicon JSON schemas: `dev.keytrace.claim`, `dev.keytrace.signature`, `dev.keytrace.key`, `dev.keytrace.recipe`, `dev.keytrace.profile`.
+- **`packages/lexicon`** - ATProto lexicon JSON schemas and generated TypeScript types. Lexicons: `dev.keytrace.claim`, `dev.keytrace.signature`, `dev.keytrace.serverPublicKey`, `dev.keytrace.statement`, `dev.keytrace.userPublicKey`, `dev.keytrace.recipe`, `dev.keytrace.profile`. Run `yarn codegen` in this package after editing lexicon JSON to regenerate `types/`.
 - **`apps/keytrace.dev`** - Nuxt 3 full-stack web application with OAuth, API, and SSR.
 
 ### Verification Pipeline (Runner Package)
@@ -54,9 +54,11 @@ yarn format:check     # Check formatting
 ### Cryptographic Attestation System
 
 - **Algorithm:** ES256 (ECDSA P-256 + SHA-256), JWS compact serialization
-- **Key rotation:** Daily keys stored in S3 (prod) or `.data/` (dev), published to keytrace's ATProto repo as `dev.keytrace.key` records
-- **`sig`** signs `{ did, subject, type, verifiedAt }` — proves claim authenticity at creation
-- **`statusSig`** signs `{ claimUri, did, status, statusAt }` — proves status changes are legitimate
+- **Key rotation:** Daily keys stored in S3 (prod) or `.data/` (dev), published to keytrace's ATProto repo as `dev.keytrace.serverPublicKey` records
+- **`sigs`** array on each claim holds one or more `dev.keytrace.signature` objects, each with a `kid` discriminator:
+  - `kid: "attest:<provider>"` — attestation sig, signs `{ claimUri, createdAt, did, identity.subject, type }`
+  - `kid: "status"` — status-change sig, signs `{ claimUri, did, status, lastVerifiedAt|failedAt|retractedAt }`
+- **Backwards compat:** Old records may have a single `sig` object instead of `sigs` array. Use `getPrimarySig()` from `@keytrace/claims` to normalize.
 - **`signedFields`** in each signature lists what fields are covered, making signatures self-documenting
 - Server utils: `attestation.ts` (high-level), `signing.ts` (ES256 JWS), `keys.ts` (key management)
 
@@ -65,7 +67,7 @@ yarn format:check     # Check formatting
 **Server API** (`apps/keytrace.dev/server/api/`):
 
 - `GET/POST /api/claims` - List or create claims
-- `PATCH /api/claims/[rkey]` - Reverify or retract a claim (with statusSig)
+- `PATCH /api/claims/[rkey]` - Reverify or retract a claim (adds status sig to sigs array)
 - `DELETE /api/claims/[rkey]` - Delete claim
 - `POST /api/verify` - Verify single claim
 - `POST /api/attest` - Create attestation signature
@@ -105,7 +107,7 @@ yarn format:check     # Check formatting
 - `packages/runner/src/types.ts` - Core type definitions
 - `packages/runner/src/runner.ts` - Verification engine
 - `packages/runner/src/claim.ts` - Claim state machine
-- `apps/keytrace.dev/server/utils/attestation.ts` - Attestation creation (sig + statusSig)
+- `apps/keytrace.dev/server/utils/attestation.ts` - Attestation creation (attestation + status sigs)
 - `apps/keytrace.dev/server/utils/signing.ts` - ES256 JWS signing primitives
 - `apps/keytrace.dev/server/utils/keys.ts` - Daily key rotation and S3 storage
 - `apps/keytrace.dev/server/utils/oauth.ts` - OAuth client, scopes, signed cookies
@@ -120,7 +122,7 @@ User submits gist URL
   → Runner matches URI to GitHub provider
   → Recipe executes: HTTP GET → CSS select → regex match for DID
   → Extract identity metadata (username, avatar)
-  → Create attestation signature (sig with signedFields)
+  → Create attestation signature (added to sigs array with signedFields)
   → Write dev.keytrace.claim to user's ATProto repo
   → Status set to "verified" with lastVerifiedAt timestamp
 ```

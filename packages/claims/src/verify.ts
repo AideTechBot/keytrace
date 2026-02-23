@@ -1,4 +1,5 @@
 import type { ClaimRecord, ClaimVerificationResult, ES256PublicJwk, KeyRecord, SignedClaimData, VerificationResult, VerificationStep, VerifyOptions } from "./types.js";
+import { getPrimarySig } from "./types.js";
 import { resolveHandle, resolvePds, listClaimRecords, getRecordByUri } from "./atproto.js";
 import { verifyES256Signature } from "./crypto/signature.js";
 
@@ -18,6 +19,7 @@ export type {
   VerificationStep,
   VerifyOptions,
 } from "./types.js";
+export { getPrimarySig } from "./types.js";
 
 /**
  * Verify all keytrace claims for a handle.
@@ -90,8 +92,11 @@ async function verifySingleClaim(did: string, uri: string, rkey: string, claim: 
   const steps: VerificationStep[] = [];
 
   try {
+    // Resolve the primary signature (supports both old `sig` and new `sigs` format)
+    const sig = getPrimarySig(claim);
+
     // Step 1: Validate claim structure
-    if (!claim.sig?.src || !claim.sig?.attestation || !claim.sig?.signedAt) {
+    if (!sig?.src || !sig?.attestation || !sig?.signedAt) {
       steps.push({
         step: "validate_claim",
         success: false,
@@ -102,9 +107,9 @@ async function verifySingleClaim(did: string, uri: string, rkey: string, claim: 
     steps.push({ step: "validate_claim", success: true, detail: "Claim structure valid" });
 
     // Step 2: Validate signing key is from a trusted signer
-    const signerDid = extractDidFromAtUri(claim.sig.src);
+    const signerDid = extractDidFromAtUri(sig.src);
     if (!signerDid || !trustedDids.has(signerDid)) {
-      const error = `Signing key is not from a trusted signer (source: ${claim.sig.src})`;
+      const error = `Signing key is not from a trusted signer (source: ${sig.src})`;
       steps.push({ step: "validate_signer", success: false, error });
       return buildResult(uri, rkey, claim, false, steps, error);
     }
@@ -113,8 +118,8 @@ async function verifySingleClaim(did: string, uri: string, rkey: string, claim: 
     // Step 3: Fetch the signing key
     let keyRecord: KeyRecord;
     try {
-      keyRecord = await getRecordByUri<KeyRecord>(claim.sig.src, options);
-      steps.push({ step: "fetch_key", success: true, detail: `Fetched key from ${claim.sig.src}` });
+      keyRecord = await getRecordByUri<KeyRecord>(sig.src, options);
+      steps.push({ step: "fetch_key", success: true, detail: `Fetched key from ${sig.src}` });
     } catch (err) {
       const error = `Failed to fetch signing key: ${err instanceof Error ? err.message : String(err)}`;
       steps.push({ step: "fetch_key", success: false, error });
@@ -135,21 +140,44 @@ async function verifySingleClaim(did: string, uri: string, rkey: string, claim: 
       return buildResult(uri, rkey, claim, false, steps, error);
     }
 
-    // Step 5: Reconstruct the signed claim data
-    const signedData: SignedClaimData = {
-      did,
-      subject: claim.identity.subject,
-      type: claim.type,
-      verifiedAt: claim.sig.signedAt,
-    };
+    // Step 5: Reconstruct the signed claim data.
+    // Use signedFields to determine which fields were signed and reconstruct them.
+    const fields = sig.signedFields ?? [];
+    const isNewFormat = fields.includes("identity.subject");
+    let signedData: SignedClaimData;
+    if (isNewFormat) {
+      // New format: signedFields tells us exactly which fields to include.
+      // Map each field name to its value from the record.
+      const valueMap: Record<string, string> = {
+        claimUri: claim.claimUri,
+        createdAt: sig.signedAt, // createdAt was set to signedAt during attestation
+        did,
+        "identity.subject": claim.identity.subject,
+        type: claim.type,
+      };
+      signedData = {};
+      for (const field of fields) {
+        if (field in valueMap) {
+          signedData[field] = valueMap[field];
+        }
+      }
+    } else {
+      // Legacy format: { did, subject, type, verifiedAt }
+      signedData = {
+        did,
+        subject: claim.identity.subject,
+        type: claim.type,
+        verifiedAt: sig.signedAt,
+      };
+    }
     steps.push({
       step: "reconstruct_data",
       success: true,
-      detail: `Reconstructed signed data for ${claim.type}:${claim.identity.subject}`,
+      detail: `Reconstructed signed data for ${claim.type}:${claim.identity.subject} (${isNewFormat ? "new" : "legacy"} format)`,
     });
 
     // Step 6: Verify the signature
-    const isValid = await verifyES256Signature(signedData, claim.sig.attestation, publicJwk);
+    const isValid = await verifyES256Signature(signedData, sig.attestation, publicJwk);
 
     if (isValid) {
       steps.push({ step: "verify_signature", success: true, detail: "Signature verified" });
