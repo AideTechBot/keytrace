@@ -4,13 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Keytrace is an identity verification system for ATProto. Users link their decentralized identities (DIDs) to external accounts (GitHub, DNS, ActivityPub, Bluesky) by creating claims that are cryptographically verified and stored as ATProto records.
+Keytrace is an identity verification system for ATProto. Users link their decentralized identities (DIDs) to external accounts (GitHub, DNS, ActivityPub, Bluesky, npm, PGP, Tangled) by creating claims that are cryptographically verified and stored as ATProto records.
+
+## Workflow
+
+- Do not push to remote or deploy unless explicitly asked.
 
 ## Commands
 
 ```bash
-# Development
-yarn dev              # Start Nuxt dev server on :3000
+# Development (must run from monorepo root)
+yarn dev              # Start Nuxt dev server on 127.0.0.1:3000
 
 # Build
 yarn build            # Build all packages (turbo)
@@ -32,61 +36,91 @@ yarn format:check     # Check formatting
 
 ### Monorepo Structure
 
-- **`packages/runner`** - Core verification library (`@keytrace/runner`). Reusable SDK for claim verification with recipe-based verification system.
-- **`packages/lexicon`** - ATProto lexicon JSON schemas defining record types (`dev.keytrace.claim`, `dev.keytrace.recipe`, etc.)
-- **`apps/keytrace.dev`** - Nuxt 3 full-stack web application with OAuth and API
+- **`packages/runner`** - Core verification library (`@keytrace/runner`). Recipe-based claim verification with service providers for GitHub, DNS, ActivityPub, Bluesky, npm, PGP, Tangled.
+- **`packages/claims`** - Client-side claim verification library (`@keytrace/claims`). ES256 signature verification, ATProto record fetching.
+- **`packages/lexicon`** - ATProto lexicon JSON schemas: `dev.keytrace.claim`, `dev.keytrace.signature`, `dev.keytrace.key`, `dev.keytrace.recipe`, `dev.keytrace.profile`.
+- **`apps/keytrace.dev`** - Nuxt 3 full-stack web application with OAuth, API, and SSR.
 
 ### Verification Pipeline (Runner Package)
 
-The runner implements a recipe-based verification system:
-
-1. **Service Providers** (`packages/runner/src/serviceProviders/`) - Map claim URIs to verification strategies (GitHub, DNS, ActivityPub, Bluesky)
+1. **Service Providers** (`packages/runner/src/serviceProviders/`) - Map claim URIs to verification strategies
 2. **Recipes** - JSON specifications defining verification steps
 3. **Verification Steps** - Composable actions: `http-get`, `dns-txt`, `css-select`, `json-path`, `regex-match`
 
 **Claim Status Flow:** `INIT` → `MATCHED` → `VERIFIED` / `FAILED` / `ERROR`
 
-Key functions:
-- `createClaim(uri, did)` - Create claim state
-- `verifyClaim(claim, opts)` - Run verification
-- `matchUri(uri)` - Match URI to service provider
-- `runRecipe(recipe, context, config)` - Execute recipe steps
+**Record Status Field:** `verified` → `failed` (re-verifiable) or `retracted` (terminal, user-initiated)
+
+### Cryptographic Attestation System
+
+- **Algorithm:** ES256 (ECDSA P-256 + SHA-256), JWS compact serialization
+- **Key rotation:** Daily keys stored in S3 (prod) or `.data/` (dev), published to keytrace's ATProto repo as `dev.keytrace.key` records
+- **`sig`** signs `{ did, subject, type, verifiedAt }` — proves claim authenticity at creation
+- **`statusSig`** signs `{ claimUri, did, status, statusAt }` — proves status changes are legitimate
+- **`signedFields`** in each signature lists what fields are covered, making signatures self-documenting
+- Server utils: `attestation.ts` (high-level), `signing.ts` (ES256 JWS), `keys.ts` (key management)
 
 ### Web App (Nuxt 3)
 
 **Server API** (`apps/keytrace.dev/server/api/`):
-- `POST /api/claims` - Create verified claim record
-- `POST /api/verify` - Verify single claim
-- `GET /api/profile/[handleOrDid]` - Fetch profile with claims
-- `DELETE /api/claims/[rkey]` - Delete claim
 
-**OAuth Flow** (`apps/keytrace.dev/server/routes/oauth/`):
-- Login initiates ATProto OAuth
-- Sessions stored with HMAC-SHA256 signed DID cookies
-- Keytrace service account writes records to user repos
+- `GET/POST /api/claims` - List or create claims
+- `PATCH /api/claims/[rkey]` - Reverify or retract a claim (with statusSig)
+- `DELETE /api/claims/[rkey]` - Delete claim
+- `POST /api/verify` - Verify single claim
+- `POST /api/attest` - Create attestation signature
+- `GET /api/profile/[handleOrDid]` - Public profile with claims
+- `GET /api/recent-claims` - Public recent claims feed
+- `GET /api/recipes`, `GET /api/recipes/[provider]` - Recipe catalog
+- `GET /api/services` - Service providers with UI config
+- `GET/PUT /api/settings/profile` - Keytrace profile settings
+- `POST /api/proxy/http`, `GET /api/proxy/dns` - SSRF-safe verification proxies
+
+**OAuth** (`server/routes/oauth/` + `server/utils/oauth.ts`):
+
+- ATProto OAuth with HMAC-SHA256 signed DID cookies
+- Scopes: create/update/delete on `dev.keytrace.claim`, create/update on `dev.keytrace.profile`
+- `dev-callback` route forwards OAuth from production to localhost for local dev
+- Session endpoint detects missing scopes and returns `needsReauth` flag
 
 **Frontend**:
-- Components auto-import from `components/` without `Ui` prefix (due to `pathPrefix: false` in nuxt.config)
-- Composables in `composables/` for shared state
-- TailwindCSS with custom `kt-*` color tokens defined in `assets/css/main.css`
 
-## Data Flow Example
+- Components auto-import from `components/` without prefix (`pathPrefix: false` in nuxt.config)
+- TailwindCSS v3 with custom `kt-*` color tokens in `assets/css/main.css`
+- Dark mode is default; light mode via `class="light"` on html
+- OG images via `nuxt-og-image` with Satori renderer; inline SSR styles disabled so crawlers reach meta tags
 
-```
-User submits gist URL
-  → POST /api/claims
-  → Runner matches URI to GitHub provider
-  → Recipe executes: HTTP GET → CSS select → regex match for DID
-  → Extract identity metadata (username, avatar)
-  → Create attestation signature
-  → Write dev.keytrace.claim to user's ATProto repo
-```
+## Key Gotchas
+
+- `yarn dev` must run from monorepo root, not from a package directory
+- Tailwind v3 via `@nuxtjs/tailwindcss` — don't install tailwindcss v4 directly
+- Nuxt server needs full restart when rebuilding workspace packages (HMR doesn't catch)
+- PDS doesn't serve `app.bsky.actor.getProfile` — use `public.api.bsky.app` for profile info
+- nuxt-og-image Satori flex plugin overrides `flexDirection` to `column` on divs with block children; add `class="flex-row"` to opt out
+- `features.inlineStyles: false` in nuxt.config prevents 68KB of inline CSS from pushing OG tags past crawler byte limits
+- ATProto lexicon `key` field uses `literal:self` for singleton records (e.g., `dev.keytrace.profile`)
 
 ## Key Files
 
 - `packages/runner/src/types.ts` - Core type definitions
 - `packages/runner/src/runner.ts` - Verification engine
 - `packages/runner/src/claim.ts` - Claim state machine
-- `packages/lexicon/lexicons/dev/keytrace/recipe.json` - Recipe schema
-- `apps/keytrace.dev/server/api/claims/index.post.ts` - Claim creation
+- `apps/keytrace.dev/server/utils/attestation.ts` - Attestation creation (sig + statusSig)
+- `apps/keytrace.dev/server/utils/signing.ts` - ES256 JWS signing primitives
+- `apps/keytrace.dev/server/utils/keys.ts` - Daily key rotation and S3 storage
+- `apps/keytrace.dev/server/utils/oauth.ts` - OAuth client, scopes, signed cookies
+- `apps/keytrace.dev/server/api/claims/index.post.ts` - Claim creation endpoint
 - `apps/keytrace.dev/assets/css/main.css` - CSS variables for theming
+
+## Data Flow Example
+
+```text
+User submits gist URL
+  → POST /api/claims
+  → Runner matches URI to GitHub provider
+  → Recipe executes: HTTP GET → CSS select → regex match for DID
+  → Extract identity metadata (username, avatar)
+  → Create attestation signature (sig with signedFields)
+  → Write dev.keytrace.claim to user's ATProto repo
+  → Status set to "verified" with lastVerifiedAt timestamp
+```

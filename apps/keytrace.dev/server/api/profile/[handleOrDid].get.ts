@@ -29,6 +29,7 @@ export default defineEventHandler(async (event) => {
       did: profile.did,
       handle: profile.handle,
       displayName: profile.displayName,
+      description: profile.description,
       avatar: profile.avatar,
       claims: profile.claimInstances.map((claim) => {
         // Find corresponding claim data for additional fields
@@ -36,12 +37,15 @@ export default defineEventHandler(async (event) => {
         return {
           uri: claim.uri,
           did: claim.did,
-          status: claim.status,
+          status: claimData?.status === "retracted" ? "retracted" : claim.status,
           type: claimData?.type,
           rkey: claimData?.rkey,
           comment: claimData?.comment,
           createdAt: claimData?.createdAt,
           identity: claimData?.identity,
+          lastVerifiedAt: claimData?.lastVerifiedAt,
+          failedAt: claimData?.failedAt,
+          recordStatus: claimData?.status,
           matches: claim.matches.map((m) => ({
             provider: m.provider.id,
             providerName: m.provider.name,
@@ -50,7 +54,11 @@ export default defineEventHandler(async (event) => {
           errors: claim.errors,
         };
       }),
-      summary: getProfileSummary(profile),
+      summary: (() => {
+        const base = getProfileSummary(profile);
+        const retracted = profile.claims.filter((c) => c.status === "retracted").length;
+        return { ...base, retracted, verified: base.verified - retracted };
+      })(),
     };
   } catch (err: unknown) {
     if (err instanceof Error && err.message.includes("resolve")) {

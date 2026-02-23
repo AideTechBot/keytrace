@@ -58,6 +58,7 @@ export interface ProfileData {
   did: string;
   handle: string;
   displayName?: string;
+  description?: string;
   avatar?: string;
   claims: ClaimData[];
 }
@@ -75,6 +76,12 @@ export interface ClaimData {
   identity?: IdentityMetadata;
   /** Signing key reference from the claim record */
   sig?: { src?: string };
+  /** Current verification status. Absent on legacy records, treated as "verified". */
+  status?: "verified" | "failed" | "retracted";
+  /** Timestamp of the most recent successful re-verification */
+  lastVerifiedAt?: string;
+  /** Timestamp when the claim last failed re-verification or was retracted */
+  failedAt?: string;
 }
 
 /**

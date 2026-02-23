@@ -12,7 +12,7 @@
         "properties": {
           "type": {
             "type": "string",
-            "knownValues": ["github", "dns", "mastodon", "twitter", "website"],
+            "knownValues": ["github", "dns", "mastodon", "twitter", "website", "pgp"],
             "description": "The claim type identifier"
           },
           "claimUri": {
@@ -36,6 +36,26 @@
             "type": "string",
             "maxLength": 256,
             "description": "Optional user-provided label for this claim"
+          },
+          "status": {
+            "type": "string",
+            "description": "Current verification status of this claim. Absent on legacy records, treated as 'verified'.",
+            "knownValues": ["verified", "failed", "retracted"]
+          },
+          "statusSig": {
+            "type": "ref",
+            "ref": "dev.keytrace.signature#main",
+            "description": "Cryptographic attestation for the current status fields. Proves status/lastVerifiedAt/failedAt were set by the keytrace service, not tampered with."
+          },
+          "lastVerifiedAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "Timestamp of the most recent successful re-verification by the system"
+          },
+          "failedAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "Timestamp when the claim last failed re-verification or was retracted"
           },
           "createdAt": {
             "type": "string",

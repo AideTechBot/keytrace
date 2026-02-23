@@ -130,13 +130,14 @@ async function fetchWithAgent(agent: AtpAgent, did: string, opts?: ProfileOption
 
   // Fetch Bluesky profile for display info via public API (not PDS)
   // The PDS doesn't serve app.bsky.actor.getProfile - only the AppView does
-  let bskyProfile: { handle: string; displayName?: string; avatar?: string } | null = null;
+  let bskyProfile: { handle: string; displayName?: string; description?: string; avatar?: string } | null = null;
   try {
     const publicAgent = new AtpAgent({ service: PUBLIC_API_URL });
     const profileRes = await publicAgent.getProfile({ actor: did });
     bskyProfile = {
       handle: profileRes.data.handle,
       displayName: profileRes.data.displayName,
+      description: profileRes.data.description,
       avatar: profileRes.data.avatar,
     };
   } catch (err: unknown) {
@@ -145,6 +146,20 @@ async function fetchWithAgent(agent: AtpAgent, did: string, opts?: ProfileOption
     if (err instanceof Error && !err.message.includes("404")) {
       console.debug(`Failed to fetch profile for ${did}: ${err.message}`);
     }
+  }
+
+  // Fetch keytrace profile record (dev.keytrace.profile/self) for bio/displayName overrides
+  let ktProfile: { displayName?: string; bio?: string } | null = null;
+  try {
+    const record = await agent.com.atproto.repo.getRecord({
+      repo: did,
+      collection: "dev.keytrace.profile",
+      rkey: "self",
+    });
+    const value = record.data.value as { displayName?: string; bio?: string };
+    ktProfile = value;
+  } catch {
+    // No keytrace profile record — that's fine
   }
 
   // List all claim records with cursor-based pagination
@@ -167,6 +182,9 @@ async function fetchWithAgent(agent: AtpAgent, did: string, opts?: ProfileOption
           createdAt?: string;
           identity?: IdentityMetadata;
           sig?: { src?: string };
+          status?: "verified" | "failed" | "retracted";
+          lastVerifiedAt?: string;
+          failedAt?: string;
         };
         if (value.claimUri) {
           claims.push({
@@ -178,6 +196,9 @@ async function fetchWithAgent(agent: AtpAgent, did: string, opts?: ProfileOption
             rkey: parseAtUriRkey(record.uri),
             identity: value.identity,
             sig: value.sig,
+            status: value.status,
+            lastVerifiedAt: value.lastVerifiedAt,
+            failedAt: value.failedAt,
           });
         }
       }
@@ -205,7 +226,8 @@ async function fetchWithAgent(agent: AtpAgent, did: string, opts?: ProfileOption
   return {
     did,
     handle: bskyProfile?.handle ?? did,
-    displayName: bskyProfile?.displayName,
+    displayName: ktProfile?.displayName || bskyProfile?.displayName,
+    description: ktProfile?.bio || bskyProfile?.description,
     avatar: bskyProfile?.avatar,
     claims,
     claimInstances,
